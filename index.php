@@ -7,8 +7,7 @@
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/",
-      "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.2/+esm",
+         "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.2/+esm",
       "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
     }
   }
@@ -28,6 +27,7 @@
 <script type="module">
 import * as THREE from 'three';
 import * as CANNON from "cannon-es";
+  import * as BufferGeometryUtils from 'https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/utils/BufferGeometryUtils.js';
 
 const world = new CANNON.World({
   gravity: new CANNON.Vec3(0, -9.82, 0)
@@ -89,13 +89,13 @@ const terrain = new TerrainGenerator(Math.random()*100);
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(
-  75, window.innerWidth / window.innerHeight, 0.1, 2000);
-camera.position.set(6, 35.3, 50.8);
+  45, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(6, 36, 73);
 camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor('#3B3B5F');
+renderer.setClearColor('#66B3FF');
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
@@ -103,8 +103,8 @@ document.body.appendChild(renderer.domElement);
 let tcounter = 0;
 let dcounter=0;
 let goodbad=0;  // 0 = good, 1 = bad
-let gods=['Agnostic','Gemini','Claude','Grok','GPT'];
-let gcol=[0,30,120,210,300];
+let gods=['Agnostic','Gemini','Claude','Amazon-Nova','GPT'];
+let gcol=[0,60,300,240];
 let glast = ['','','','',''];
 const size = 128;
 const segments = 512;
@@ -141,6 +141,167 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 directionalLight.position.set(50, 100, 50);
 scene.add(directionalLight);
 directionalLight.castShadow = true;
+
+const stem = new THREE.CylinderGeometry(0.04, 0.04, 1, 6);
+stem.translate(0, 0.5, 0);
+const stem2 = new THREE.CylinderGeometry(0.04,0.04,0.7071,6);
+stem2.rotateX(Math.PI/4);
+stem2.translate(0,1.25,0.25);
+const stem3 = new THREE.ConeGeometry(0.2,0.5,8,1,true,0,6.283185);
+stem3.translate(0,0.2,0);
+const leaf1 = new THREE.SphereGeometry(0.2, 8, 8);
+leaf1.scale(1.5, 0.15, 0.5);            // flatten vertically
+leaf1.rotateZ(-Math.PI / 4);          // tilt upward to the left
+leaf1.translate(-0.2,1.2,0);
+
+const leaf2 = new THREE.SphereGeometry(0.2, 8, 8);
+leaf2.scale(1.5, 0.15, 0.5);
+leaf2.rotateZ(Math.PI / 4);           // tilt upward to the right
+leaf2.translate(0.2, 1.2, 0);
+const center = new THREE.SphereGeometry(0.15, 8, 8);
+center.translate(0, 1.6, 0.6);
+const petalCount = 12;
+const petal = new THREE.ConeGeometry(0.05, 0.3, 6);
+
+petal.rotateZ(Math.PI / 2);
+petal.translate(0.15, 0, 0); 
+const petalGeos = [];
+for (let i = 0; i < petalCount; i++) {
+  const a = (i / petalCount) * Math.PI * 2;
+  const g = petal.clone();
+
+  // rotate around Y to make a ring
+  g.applyMatrix4(
+    new THREE.Matrix4()
+      .makeRotationY(a)
+      
+  );
+ 
+  petalGeos.push(g);
+}
+const mergedPetals = BufferGeometryUtils.mergeGeometries(petalGeos);
+mergedPetals.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2.2));
+mergedPetals.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 1.6, 0.65));
+const merged = BufferGeometryUtils.mergeGeometries([stem, stem2, stem3, leaf1, leaf2, center, mergedPetals]);
+function tagGeometry(geometry, tagValue) {
+  const count = geometry.attributes.position.count;
+  const tags = new Float32Array(count).fill(tagValue);
+  geometry.setAttribute('isPetal', new THREE.InstancedBufferAttribute(tags, 1));
+  return geometry;
+}
+const stemGeoTagged = tagGeometry(stem, 0.0);
+const stem2GeoTagged = tagGeometry(stem2, 0.0);
+const stem3GeoTagged = tagGeometry(stem3, 0.0);
+const leaf1GeoTagged = tagGeometry(leaf1, 0.0);
+const leaf2GeoTagged = tagGeometry(leaf2, 0.0);
+
+const headGeoTagged = tagGeometry(center, 2.0);
+const petalGeoTagged = tagGeometry(mergedPetals, 1.0);
+const sunflowerGeo = BufferGeometryUtils.mergeGeometries([
+  stemGeoTagged,
+  stem2GeoTagged,
+  stem3GeoTagged,
+  leaf1GeoTagged,
+  leaf2GeoTagged,
+  headGeoTagged,
+  petalGeoTagged
+]);
+const sunflowerMat = new THREE.ShaderMaterial({
+  uniforms: {
+    stemColor: { value: new THREE.Color('#5baa5b') } // base green
+  },
+  vertexShader: `
+    attribute float isPetal;
+    varying float vIsPetal;
+    varying vec3 vColor;
+    void main() {
+      vIsPetal = isPetal;
+      vColor = instanceColor; // vertex color (for later use)
+      gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 stemColor;
+    varying float vIsPetal;
+    varying vec3 vColor;
+    void main() {
+      vec3 col = mix(stemColor, mix(vColor,vColor * 0.8,step(1.5,vIsPetal)), step(0.5, vIsPetal));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+});
+const count = 2900;
+const sunmesh = new THREE.InstancedMesh(sunflowerGeo, sunflowerMat, count);
+sunmesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+const dummy = new THREE.Object3D();
+for (let i = 0; i < count; i++) {
+  let a = Math.random()*6.283;
+  let v = Math.sqrt(Math.random())*63.5;
+  let x = v * Math.cos(a);
+  let z = v * Math.sin(a);
+  dummy.scale.set(0.42,0.42,0.42);
+  dummy.position.set(x,terrain.getHeight(x,z)-0.1,z);
+  dummy.updateMatrix();
+  sunmesh.setMatrixAt(i, dummy.matrix);
+  const color = new THREE.Color();
+  color.setHSL(0.7+Math.sin(terrain.getHeight(x*.3,z*.32)*2)*0.25,0.75,0.7);
+  sunmesh.setColorAt(i, color);
+}
+sunmesh.instanceColor.needsUpdate = true;
+scene.add(sunmesh);
+
+const skyGeo = new THREE.CylinderGeometry(64, 64, 200, 64, 1, true);
+skyGeo.scale(-1, 1, 1); // Flip normals inward
+
+// Simple cloud shader
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.DoubleSide,
+  uniforms: {
+    time: { value: 0.0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float time;
+    varying vec2 vUv;
+
+    // simple 2D noise
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      vec2 u = f*f*(3.0-2.0*f);
+      return mix(a, b, u.x) + (c - a)*u.y*(1.0 - u.x) + (d - b)*u.x*u.y;
+    }
+
+    void main() {
+      vec2 uv = (vUv.x < 0.5 ? vUv : vec2(1.0-vUv.x,vUv.y)) * vec2(20.0, 24.0); // repeat clouds horizontally
+      uv.x += time * 0.2;             // drift clouds
+
+      float n = (noise(uv) + noise(uv.yx))*0.5;
+      float clouds = smoothstep(0.6, 0.9, n);
+      vec3 sky = mix(vec3(0.4,0.7,1.), vec3(1.0), clouds);
+
+      gl_FragColor = vec4(sky, 1.0);
+    }
+  `
+});
+
+const sky = new THREE.Mesh(skyGeo, skyMat);
+scene.add(sky);
+
 
 class RevLight {
  constructor(god,x,y) {
@@ -191,7 +352,7 @@ pgbody.quaternion.setFromEuler(-Math.PI / 2, 0, 0, "XYZ"); // rotate to XZ plane
 world.addBody(pgbody);
 
 class SpriteCreature extends THREE.Group {
-  constructor(size = 1, x = 0, z = 0) {
+  constructor(size = 1, x = 0, z = 0, faith = 1) {
     super();
     
     this.creatureSize = size;
@@ -205,10 +366,19 @@ class SpriteCreature extends THREE.Group {
     this.scale.setScalar(size);
     this.cooldown = 0;
     this.lockedTarget = 0;
-    this.currentProg = pursue;
+    this.currentProg = null;
     this.health = 100;
-    this.faith = 0;
-    
+    this.faith = faith;
+    this.mode = 0;
+    this.birthdate = Date.now();
+    const cylinderShape = new CANNON.Cylinder(0.2, 0.6, 1.3, 16);
+    this.halo.material.color = new THREE.Color(hsvToRgb(gcol[this.faith],1,1,0));
+    this.body = new CANNON.Body({ mass: 5 });
+    this.body.addShape(cylinderShape);
+    this.body.position.set(x, 0, z);
+    this.body.angularDamping = 0.9;
+    this.body.linearDamping = 0.5;
+    world.addBody(this.body);
   }
   
   createMaterials() {
@@ -274,11 +444,7 @@ class SpriteCreature extends THREE.Group {
     this.add(headMesh);
 
     const haloGeometry = new THREE.TorusGeometry(0.4,0.05);
-    const haloMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffff00, 
-      transparent: true,
-      opacity: 0
-    });
+    const haloMaterial = new THREE.MeshStandardMaterial({color: 0xFFFFFF});
     this.halo = new THREE.Mesh(haloGeometry, haloMaterial);
     this.halo.rotation.x = Math.PI / 2; 
     this.halo.position.y = 1.6;
@@ -434,37 +600,46 @@ class SpriteCreature extends THREE.Group {
   }
 
   moveToward(x, z, speed) {
-    const dx = x - this.position.x;
-    const dz = z - this.position.z;
+    const dx = x - this.body.position.x;
+    const dz = z - this.body.position.z;
     let ang = Math.atan2(dz,dx);
-    this.position.x += speed * Math.cos(ang);
-    this.position.z += speed * Math.sin(ang);
+    this.body.position.x += speed * Math.cos(ang);
+    this.body.position.z += speed * Math.sin(ang);
   }
 
   moveAway(x, z, speed) {
-    const dx = x - this.position.x;
-    const dz = z - this.position.z;
+    const dx = x - this.body.position.x;
+    const dz = z - this.body.position.z;
     let ang = Math.atan2(dz,dx);
-    this.position.x -= speed * Math.cos(ang);
-    this.position.z -= speed * Math.sin(ang);
+    this.body.position.x -= speed * Math.cos(ang);
+    this.body.position.z -= speed * Math.sin(ang);
   }
 
 }
 
 let creatures = [];
 let me;
-for (me=0; me<5; me++) {
- let c=new SpriteCreature(1.0, Math.random()*10-5, Math.random()*8 - 4);
+for (me=0; me<6; me++) {
+ let c=new SpriteCreature(1.4, Math.random()*10-5, Math.random()*8 - 4, 1+Math.floor(me/2));
  creatures.push(c); 
- c.currentProg = getProgram();
  c.castShadow = true;
  scene.add(c);
 }
 
-
 const gbox = new THREE.BoxGeometry(1, 1, 1);
+
 const mbox = new THREE.MeshStandardMaterial({
-  color: 0x44aa88,
+  color: 0xD3AF37,
+  side: THREE.DoubleSide
+});
+
+const mbox2 = new THREE.MeshStandardMaterial({
+  color: 0x6A452C,
+  side: THREE.DoubleSide
+});
+
+const mbox3 = new THREE.MeshStandardMaterial({
+  color: 0xEEEEFF,
   side: THREE.DoubleSide
 });
 
@@ -479,6 +654,9 @@ class Target {
      this.box.receiveShadow = true;
      this.box.position.set(x,35,y);
      this.number = ++tcounter;
+     this.restingplace = [0,0,0];
+     this.goresting = 0;
+     this.birthdate = Date.now();
      this.captured=0;
      scene.add(this.box);
      const halfExtents = new CANNON.Vec3(0.5, 0.5, 0.5); // Adjust if your box is different size
@@ -583,22 +761,22 @@ var keydown=[0,0,0,0,0,0,0,0,0,0,0,0];
 let twopi = Math.PI * 2;
 let ninety = Math.PI * 0.5;
 
-var theta = -1.6802522945531422;
+var theta = -1.63;
 var stheta = theta;
 var left=0, ltop=0, mousepressed=0;
-var yang = -0.6043825866906077;
+var yang = -0.27;
 var syang = yang;
-var spd = 0.5, spd2=0.2;
+var spd = 0.6, spd2=0.25;
 var wiw = window.innerWidth;
 var wih = window.innerHeight;
 var overscroll = 0;
 
 function nearest(limit) {
-  let mn = limit*limit;
+  let mn = limit;
   let index=-1;
   for (var e=0; e< creatures.length; e++) 
   if (!(e==me)) {
-    let dst=(creatures[e].position.x - creatures[me].position.x)*(creatures[e].position.x - creatures[me].position.x)+(creatures[e].position.z - creatures[me].position.z)*(creatures[e].position.z - creatures[me].position.z);
+    let dst=Math.hypot(creatures[e].body.position.x - creatures[me].body.position.x,creatures[e].body.position.z - creatures[me].body.position.z);
     if (dst<mn) {
       index=e;
       mn=dst;
@@ -608,32 +786,118 @@ function nearest(limit) {
 }
 
 function evade() {
+  
   let ind = nearest(5);
   if (ind>=0) {
-    creatures[me].moveAway(creatures[ind].position.x,creatures[ind].position.z,0.1);
+    creatures[me].moveAway(creatures[ind].body.position.x,creatures[ind].body.position.z,0.1);
   }
 }
 
 function pursue() {
-  if (!creatures[me].lockedTarget) creatures[me].lockedTarget=findTarget();
-  if (creatures[me].lockedTarget) {
-    let t = targets.get(creatures[me].lockedTarget);
+  let c = creatures[me];
+  if (!c.lockedTarget) c.lockedTarget=findTarget(0);
+  if (c.lockedTarget) {
+    let t = targets.get(c.lockedTarget);
     if (t === undefined) 
-       creatures[me].lockedTarget=0;
+       c.lockedTarget=0;
     else {
-    creatures[me].moveToward(t.box.position.x,t.box.position.z,0.1);
-    creatures[me].rotation.y = Math.atan2(t.box.position.z - creatures[me].position.z,t.box.position.x - creatures[me].position.x);
-    if (targets.get(creatures[me].lockedTarget).captured>0) creatures[me].lockedTarget=0;
+      c.moveToward(t.box.position.x,t.box.position.z,0.1);
+      if (targets.get(c.lockedTarget).captured>0) c.lockedTarget=0;
+      else {
+         if (Math.hypot(c.body.position.x - t.box.position.x,c.body.position.z - t.box.position.z)<1) 
+         if (t.box.position.y - c.body.position.y < 2) {
+          c.health+=20;
+          t.captured=1;
+          c.lockedTarget=0;
+          c.currentProg = getProgram();
+          t.box.material = mbox2;
+         }
+      }
     }
   }
 }
 
-function findTarget() {
+function findblock() {
+  let c = creatures[me];
+  if (!c.lockedTarget) c.lockedTarget=findTarget(1);
+  if (c.lockedTarget) {
+    let t = targets.get(c.lockedTarget);
+    if (t === undefined) 
+       c.lockedTarget=0;
+    else {
+      c.moveToward(t.box.position.x,t.box.position.z,0.1);
+      if (targets.get(c.lockedTarget).captured>1) c.lockedTarget=0;
+      else {
+         if (Math.hypot(c.body.position.x - t.box.position.x,c.body.position.z - t.box.position.z)<1) {
+          t.captured=2;
+          t.box.material = mbox3;
+          world.removeBody(t.body);
+          c.currentProg = placeblock;
+         }
+      }
+    }
+  }
+  else c.currentProg = getProgram();
+}
+
+function placeblock() {
+  let c = creatures[me];
+  let tmp = Temples[c.faith];
+  c.moveToward(tmp[0],tmp[1],0.1);
+  if (c.lockedTarget > 0) {
+    let t = targets.get(c.lockedTarget);
+    try {
+      t.body.position.set(c.body.position.x + 0.5, c.body.position.y, c.body.position.z + 0.5);
+    } catch (error) {
+      console.error('Error setting target body position:', error);
+      console.error('t.body:', t);
+      console.error('c.body:', c);
+    }
+  }
+  let h = Math.hypot(c.body.position.x - tmp[0],c.body.position.z - tmp[1]);
+  if (h<9) {
+    let t = targets.get(c.lockedTarget);
+    t.captured=3;
+    c.currentProg = getProgram();
+    let tmp = Temples[creatures[me].faith];
+    let index = tmp[2];
+    let lvl = Math.floor(index/9);
+    index-=lvl*9;
+    let yy = Math.floor(index/3);
+    index-=yy*3;
+    let x = tmp[0]-1+index;
+    let z = tmp[1]-1+yy;
+    let y = terrain.getHeight(tmp[0],tmp[1])+3+lvl;
+    tmp[2]++;
+    t.body.position.y+=5;
+    const p0 = new CANNON.Vec3(t.body.position.x,t.body.position.y,t.body.position.z);
+    const pT = new CANNON.Vec3(x,y,z);
+    const dx = pT.x - p0.x;
+    const dz = pT.z - p0.z;
+    const dy = pT.y - p0.y;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    const angle = Math.PI/4;
+    const denom = 2 * Math.cos(angle) ** 2 * (d * Math.tan(angle) - dy);
+    const v0 = Math.sqrt((9.82 * d * d) / denom);
+    const dir = new CANNON.Vec3(dx / d, 0, dz / d);
+    const vel = new CANNON.Vec3(
+    v0 * Math.cos(angle) * dir.x,
+    v0 * Math.sin(angle),
+    v0 * Math.cos(angle) * dir.z
+    );
+    world.addBody(t.body);
+    t.body.velocity.copy(vel);
+    t.goresting=1;
+    t.restingplace = [x,y,z];    
+  }
+}
+
+function findTarget(lvl) {
   let mn = 9999999;
   let index=0;
   targets.forEach((target, key) => {
-   if (target.captured<0.5) {
-    let dst=(target.box.position.x - creatures[me].position.x)*(target.box.position.x - creatures[me].position.x)+(target.box.position.z - creatures[me].position.z)*(target.box.position.z - creatures[me].position.z);
+   if (target.captured == lvl) {
+    let dst=Math.hypot(target.box.position.x - creatures[me].body.position.x,target.box.position.z - creatures[me].body.position.z);
     if (dst<mn) {
       index=key;
       mn=dst;
@@ -648,13 +912,18 @@ function haverest() {
  
 function getProgram() {
   let r = Math.random();
+  creatures[me].lockedTarget = 0;
   creatures[me].cooldown=250+Math.random()*200;
   if (creatures[me].health<25) r+=0.4;
   if (r<0.2) {
      creatures[me].cooldown = 200;
      return haverest;
   }
-  if (r<0.5) return evade;
+  if (r<0.4) return evade;
+  if (r<0.7) {
+     creatures[me].cooldown = 99999;
+     return findblock;
+  }
   return pursue;
 }
 
@@ -693,7 +962,7 @@ document.addEventListener('keydown', (e) => {
          case 32 : goodbad = 1-goodbad; break;
          case 84 :
             for (let i=0; i<creatures.length; i++) {
-              console.log('pos='+creatures[i].position.x.toFixed(1)+','+creatures[i].position.z.toFixed(1)+' health='+creatures[i].healath);
+              console.log('pos='+creatures[i].body.position.x.toFixed(1)+','+creatures[i].body.position.z.toFixed(1)+' health='+creatures[i].healath);
 
             };
 
@@ -788,6 +1057,8 @@ function showCreature(a) {
     case pursue: txt='Pursue'; break;
     case evade: txt='Evade'; break;
     case haverest: txt='Rest'; break;
+    case findblock: txt='Find Block'; break;
+    case placeblock: txt='Place Block'; break;
     default: txt='Custom';
   }
   document.getElementById('info').innerHTML='Creature #'+a+'<br><br>Current Function:<br>'+txt+'<br><br>Health: '+ creatures[a].health.toFixed(1)+'<br><br>Faith: '+gods[creatures[a].faith];
@@ -827,13 +1098,85 @@ function envclamp(a) {
  return a;
 }
 
+let Temples = [[]];
+
+for (let e=1; e<4; e++) {
+  let ang = e*twopi/3 + Math.random();
+  let dst = 25+Math.random()*25;
+  let x = dst * Math.cos(ang);
+  let z = dst * Math.sin(ang);
+  let y = terrain.getHeight(x,z)+3.5;
+  Temples.push([x,z,0]);
+  const tboxg = new THREE.BoxGeometry(3,10,3);
+  const tcolor = new THREE.Color(hsvToRgb(gcol[e],1,1,0));
+  const tbasem = new THREE.MeshStandardMaterial({color: tcolor, side: THREE.DoubleSide});
+  const tboxm = new THREE.MeshBasicMaterial({ color: tcolor, wireframe:true});
+  const edges = new THREE.EdgesGeometry(tboxg);
+  const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: tcolor}));
+  scene.add(line);
+  const tbase = new THREE.Mesh(tboxg,tbasem);
+  tbase.position.set(x,y-6,z);
+  scene.add(tbase); 
+  line.position.set(x,y,z);
+  const troofg = new THREE.BufferGeometry();
+  const vertices = new Float32Array([-1.5,5,-1.5, 1.5, 5, -1.5, 1.5, 5, 1.5, -1.5, 5, 1.5, 0,7, 0]);
+  troofg.setAttribute('position',new THREE.BufferAttribute(vertices,3));
+  troofg.setIndex([0,1,4,1,2,4,2,3,4,3,0,4]);
+  troofg.computeVertexNormals();
+  const troofmesh = new THREE.Mesh(troofg,tboxm);
+  troofmesh.position.set(x,y,z);
+  scene.add(troofmesh);
+  
+}
+  
+let tstart = Date.now();
+
 function animate() {
   world.step(1/60);
+  skyMat.uniforms.time.value += 0.01;
+  let now = Date.now();
+
   targets.forEach((target,key) => {
-     target.box.position.copy(target.body.position);
-     target.box.quaternion.copy(target.body.quaternion);
-     if (Math.abs(target.body.position.x)>64) target.captured=1;
-     if (Math.abs(target.body.position.z)>64) target.captured=1;
+    target.box.position.copy(target.body.position);
+    target.box.quaternion.copy(target.body.quaternion);
+    if (Math.hypot(target.body.position.x,target.body.position.z)>63.5) {
+        world.removeBody(target.body);
+        scene.remove(target.box);
+        targets.delete(key);
+    }
+    if (target.captured<2) {
+      if (now - target.birthdate > 45000) {
+        world.removeBody(target.body);
+        scene.remove(target.box);
+        targets.delete(key);
+      }
+    } else {
+      if (target.goresting>0) {
+        let h = Math.hypot(target.body.position.x - target.restingplace[0],target.body.position.y-target.restingplace[1],target.body.position.z-target.restingplace[2]);
+        if (h<3.5) {
+          if (target.goresting<2) {
+            target.body.velocity.set(0,0,0);
+            target.body.angularVelocity.set(0,0,0);
+            target.body.type = CANNON.Body.STATIC;
+            world.removeBody(target.body);
+            world.addBody(target.body);
+            target.birthdate=Date.now();
+            target.goresting=2;
+          }
+          if (target.goresting<3) {
+            let elap = Math.min(2000,now - target.birthdate);
+            let fct=0.03*(1+elap/500);
+            target.body.position.x += (target.restingplace[0]-target.body.position.x)*fct;  
+            target.body.position.y += (target.restingplace[1]-target.body.position.y)*fct;
+            target.body.position.z += (target.restingplace[2]-target.body.position.z)*fct;
+            const targetQuat = new CANNON.Quaternion();
+            targetQuat.setFromEuler(0, 0, 0);    
+            target.body.quaternion.slerp(targetQuat, elap/2000, target.body.quaternion);
+            if ((elap>2000) && (h<0.01)) target.goresting=3;
+          }
+        }
+      }
+    }
   });
   dangers.forEach((target,key) => {
      target.box.position.copy(target.body.position);
@@ -847,7 +1190,23 @@ function animate() {
      }
   });
 
-  let now = Date.now();
+
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < sunmesh.count; i++) {
+    sunmesh.getMatrixAt(i, dummy.matrix);
+    dummy.position.setFromMatrixPosition(dummy.matrix);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(1, 1, 1);
+    const angle = 0.4*Math.sin((now-tstart)/1400);
+    dummy.rotation.y = angle;
+    dummy.updateMatrix();
+    sunmesh.setMatrixAt(i, dummy.matrix);
+  }
+  sunmesh.instanceMatrix.needsUpdate = true;
+
+  // let elap = 1 + (now - tstart)/5000;
+  // directionalLight.position.set(0, 120 * Math.sin(elap), 120 * Math.cos(elap));
+//   directionalLight.target.position.set(0,terrain.getHeight(0,0),0);
   let rs = revlights.length;
   let takeout=-1;
   for (let i=0;  i<rs; i++) {
@@ -860,7 +1219,7 @@ function animate() {
       takeout=i;
    else {
      let fac = r.intensity/30;
-     for (let e=0; e<5; e++)
+     for (let e=0; e<creatures.length; e++)
      if (creatures[e].health>0) { 
        let ce = creatures[e];
        let h = Math.hypot(r.beam.position.x - ce.position.x, r.beam.position.z - ce.position.z);
@@ -888,44 +1247,81 @@ function animate() {
             ce.bodyTexture.needsUpdate = true;
           }
        }
+       if (ce.mode ==0)
+       if (h<3) {
+          ce.body.type = CANNON.Body.STATIC;
+          ce.mode=2;
+          ce.birthdate = Date.now(); 
+          ce.body.position.x = r.beam.position.x;
+          ce.body.position.z = r.beam.position.z;
+          ce.currentProg = null;
+       }
      }
    }
   }
   if (takeout>=0) {
     scene.remove(revlights[takeout].beam);
+    revlights[takeout].beam.material.dispose();
+    revlights[takeout].beam.geometry.dispose();
     revlights.splice(takeout,1);
   }
+
   for(me=0; me<creatures.length; me++) 
   if (creatures[me].health>0) {
     let c = creatures[me];
-    c.currentProg();
-    c.position.x = envclamp(c.position.x);
-    c.position.z = envclamp(c.position.z);
-
-    c.position.y=1.2 * c.creatureSize + terrain.getHeight(c.position.x,c.position.z);
-    targets.forEach((target, key) => {
-     if (!target.captured) {
-      if (Math.abs(c.position.x - target.box.position.x)<1)
-      if (Math.abs(c.position.y - target.box.position.y)<2)
-      if (Math.abs(c.position.z - target.box.position.z)<1) {
-        c.creatureSize *=1.1;
-        c.health+=20;
-        target.captured=1;
-        c.setSize(c.creatureSize);
-        c.lockedTarget=0;
-        c.currentProg = getProgram();
-        const startPos = target.box.position;
-        const targetPos = new THREE.Vector3(0, 0, 0); // center of environment
-        const horizontalDir = new THREE.Vector3(-startPos.x, 0, -startPos.z).normalize();
-        const horizontalDistance = new THREE.Vector3(startPos.x, 0, startPos.z).length();
-        const verticalSpeed = 10;
-        const horizontalSpeed = horizontalDistance / 2; // can tune this
-        const impulse = new CANNON.Vec3(horizontalDir.x * horizontalSpeed,verticalSpeed,horizontalDir.z * horizontalSpeed);
-        target.body.velocity.set(impulse.x, impulse.y, impulse.z);
+    if (c.currentProg === null) 
+      c.currentProg = getProgram();
+    if (c.mode ==0) c.currentProg();
+    c.body.position.x = envclamp(c.body.position.x);
+    c.body.position.z = envclamp(c.body.position.z);
+    c.body.position.y=1.2 * c.creatureSize + terrain.getHeight(c.body.position.x,c.body.position.z);
+    let life = now - c.birthdate;
+    switch (c.mode) {
+     case 1:
+      c.body.position.y+= life/2000 -2;
+      if (life>4000) {
+        c.mode=0;
+        c.body.type = CANNON.Body.DYNAMIC;
       }
-     }
-     
-   });
+      break;
+    case 2 :
+      c.body.position.y+= life/100;
+      c.scale.setScalar(c.creatureSize * (1-life/4500));
+      c.body.quaternion.setFromEuler(life/500, 0, life / 800, "XYZ");
+      if (life>3000) {
+        c.mode=3;
+        c.birthdate = now;
+      }
+      break;
+    case 3 : 
+      if (life>1000) {
+        c.mode=4;
+        c.body.quaternion.setFromEuler(0, 0, 0, "XYZ");
+      }
+      break;
+   case 4 : 
+      let ht = 4 * Math.pow(life/1000,2);
+      c.body.position.y+= 30 - ht;
+      c.scale.setScalar(c.creatureSize* ht/30);
+
+      if (ht>=30) {
+       c.body.type = CANNON.Body.DYNAMIC;
+       c.scale.setScalar(c.creatureSize);
+       c.mode=0;      
+      }
+    }
+    c.body.angularVelocity.x = 0;
+    c.body.angularVelocity.z = 0;
+    if (c.mode < 2) {
+    let euler = new CANNON.Vec3();
+    c.body.quaternion.toEuler(euler);
+    euler.x = 0;
+    euler.z = 0;
+    c.body.quaternion.setFromEuler(euler.x, euler.y, euler.z);
+    }
+    c.position.copy(c.body.position);
+    c.quaternion.copy(c.body.quaternion);
+   
    dangers.forEach((danger,key) => {
       if (Math.abs(c.position.x - danger.box.position.x)<3)
       if (Math.abs(c.position.y - danger.box.position.y)<3)
@@ -936,8 +1332,16 @@ function animate() {
    });
    if (--c.cooldown<=0) c.currentProg = getProgram();
    c.health-=0.03 * Math.sqrt(c.creatureSize);
-   if (c.health<=0) scene.remove(c);
-//   else c.drawCustomBodyPattern(healthcol);
+   if (c.health<=0) {
+      scene.remove(c);
+      world.removeBody(c.body);
+      if (c.currentProg === placeblock) 
+      if (c.lockedTarget>0) {
+         let t = targets.get(c.lockedTarget);
+         t.captured=1;
+         t.body.material = mbox2;
+      }    
+   }
   }
    if (keydown[1]) {
      theta+=0.015;
@@ -966,7 +1370,7 @@ function animate() {
       camera.position.y-=spd*Math.sin(yang);
    }
    overscroll=0;
-
+ 
    if (keydown[4]) {
       camera.position.y+=spd2;
    }
@@ -975,6 +1379,14 @@ function animate() {
       camera.position.y-=spd2;
    }
 
+   const camd = Math.hypot(camera.position.x,camera.position.z);
+   if (camd>63.5) {
+      const ang = Math.atan2(camera.position.z,camera.position.x);
+      camera.position.x = 63.5 * Math.cos(ang);
+      camera.position.z = 63.5 * Math.sin(ang);
+   }
+   const grnd = 0.5+terrain.getHeight(camera.position.x,camera.position.z);
+   if (camera.position.y<grnd) camera.position.y = grnd;
    camera.lookAt(camera.position.x + 0.15*Math.cos(theta)*Math.cos(yang),camera.position.y + 0.15*Math.sin(yang),camera.position.z + 0.15*Math.sin(theta)*Math.cos(yang));
 
   requestAnimationFrame(animate);
@@ -982,10 +1394,10 @@ function animate() {
 }
 
 var xmlhttp;
-var uptoAI=3;
+var uptoAI=1;
 
 function askGod()
-  {  if (++uptoAI > 4) uptoAI=1;
+  {  if (++uptoAI > 3) uptoAI=1;
 
      let l = creatures.length;
      let summ=[];
@@ -1022,6 +1434,7 @@ function stateChanged1()
 if (xmlhttp.readyState==4)
   {
      var v=xmlhttp.responseText;
+// console.log('1 => '+v);
      var j  = JSON.parse(v);
      if (j.success === true) 
        doGodsWork(1,JSON.parse(j.message));  
@@ -1033,6 +1446,8 @@ function stateChanged2()
 if (xmlhttp.readyState==4)
   {
      var v=xmlhttp.responseText;
+// console.log('2 => '+v);
+
      var j  = JSON.parse(v);
      if (j.success === true) 
        doGodsWork(2,JSON.parse(j.message));  
@@ -1044,29 +1459,23 @@ function stateChanged3()
 if (xmlhttp.readyState==4)
   {
      var v=xmlhttp.responseText;
+// console.log('3 => '+v);
      var j  = JSON.parse(v);
      if (j.success === true) 
        doGodsWork(3,JSON.parse(j.message));  
   }
 }
 
-function stateChanged4()
-{
-if (xmlhttp.readyState==4)
-  {
-     var v=xmlhttp.responseText;
-     var j  = JSON.parse(v);
-     if (j.success === true) 
-       doGodsWork(4,JSON.parse(j.message));  
-  }
-}
-
 function doGodsWork(god,m) {
+     if (Math.random()<0.1) {
+       m.action = 'Immaculate';
+       m.x /=2;
+       m.y /=2;
+     }
         headdisplay(gods[god]+' plays '+m.action,god);
         glast[god]=m.action;
         if (m.action == 'Revelation') {
             revlights.push(new RevLight(god,m.x,m.y));
-            console.log(revlights);
         }
         if (m.action == 'Bless') {
           for (let i=0; i<3; i++) {
@@ -1078,8 +1487,17 @@ function doGodsWork(god,m) {
           let t = new Danger(m.x,m.y);
           dangers.set(t.number,t);
         } 
-        console.log(gods[god]+' => '+JSON.stringify(m));
- 
+        if (m.action== 'Immaculate') {
+          let c = new SpriteCreature(1.4,m.x,m.y,god);
+          c.mode=1; 
+          c.body.type = CANNON.Body.STATIC;
+          creatures.push(c);
+          me = creatures.length-1;  
+          c.currentProg = getProgram();
+          c.castShadow = true;
+          scene.add(c);
+        }
+//        console.log(gods[god]+' => '+JSON.stringify(m));
 }
 
 var headop=2;

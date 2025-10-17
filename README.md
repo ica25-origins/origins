@@ -1,193 +1,214 @@
-# Origins
+# **Origins**
 
-**Origins** is an interactive simulation and generative artwork developed for the ICA 25 course on art and computation.  
-It explores how systems of belief and influence can emerge from simple rules, and how large language models (LLMs) can act as autonomous creative agents within a digital ecology.
-
-The project is built using JavaScript and Three.js for the simulation and rendering layers, with PHP used only for connecting to external LLM APIs.  
-It is both a creative coding exercise and an inquiry into the deification of software.
+## **Overview**
+**Origins** is a generative life simulation built in **JavaScript** and **Three.js**.  
+The project was developed for **ICA 25**, a creative coding course in the **Mathcastles Discord**, and explores themes of emergence, belief, biology, and systemic complexity in autonomous agent-based systems.
 
 ---
 
-## Overview
+## **Concept**
+In *Origins*, autonomous digital creatures evolve over time within a simulated 3D world.  
+These creatures can move, eat, reproduce, form beliefs, and eventually die.  
+The simulation unfolds without direct player control, encouraging observation and reflection on how complex behaviors emerge from simple rules.
 
-In **Origins**, autonomous digital creatures inhabit a bounded two-dimensional world.  
-Each creature has basic needs such as energy and survival, and can act independently based on those needs.  
-At regular intervals, four different LLMs (Gemini, Claude, Grok, and GPT) act as gods that issue simple JSON commands to modify the world state.
+Each creature has its own:
 
-These gods can perform one of three actions:
-
-- **Revelation**: Emit a light beam that converts nearby creatures into followers.  
-- **Bless**: Create beneficial items that restore creature energy.  
-- **Curse**: Create harmful regions that drain energy and can cause death.
-
-The human player also participates by placing food or hazards in the world.  
-Player input is intentionally limited to encourage observation and reflection rather than control.
-
-The piece functions as both a game and an art installation, asking how computation, belief, and agency overlap when autonomous systems interact.
+- **Physical needs** (health, hunger, breed capability)  
+- **Cognitive attributes** (devotion, susceptibility to belief)  
+- **Faith dynamics** (interacting with gods and churches)  
+- **Reproductive logic** (health + religion-based influence)
 
 ---
 
-## Technical Structure
+## **MVP Mechanics: Faith, Biology, Survival**
 
-### Languages and Frameworks
+### **Core Entities**
 
-- **JavaScript (ES6)** for core simulation logic
-- **Three.js** for 3D rendering and camera interaction
-- **Cannon-ES** for simple physics (movement, collisions)
-- **PHP** for API interaction with external LLMs
-- **HTML/CSS** for layout and interface display
+#### **Creature Attributes**
 
-### System Components
-
-frontend/
-├── index.php # Main simulation file (could also be named index.html)
-├── js/
-│ ├── creatures.js # Creature class and behavior system
-│ ├── world.js # World initialization and update loop
-│ ├── llmManager.js # Handles LLM API calls and responses
-│ └── ui.js # Displays statistics and player interface
-backend/
-├── ajaxgod1.php # Gemini endpoint
-├── ajaxgod2.php # Claude endpoint
-├── ajaxgod3.php # Grok endpoint
-└── ajaxgod4.php # GPT endpoint
-assets/
-├── textures/
-└── models/
-
-
-The PHP files are minimal wrappers that send the current world state to each LLM and receive their JSON-formatted actions.  
-All game logic and visualization occur in the JavaScript environment.
+| **Attribute** | **Description** |
+|----------------|-----------------|
+| **Health** | Randomized at creation. Boosted via consumption or church effects. Can be donated to build churches. |
+| **Devotion** | Determines resistance/susceptibility to adopting a religion. After two rejections, must convert. |
+| **Sex** | Randomized at birth (not necessarily 50/50). |
+| **Breed Capability** | Reproductive capacity, influenced by health and religious adherence. |
+| **Faith** | Initially agnostic. Converts to a god after repeated exposure or divine influence. |
 
 ---
 
-## Game Mechanics
+### **Creature Actions**
 
-Each creature in the simulation has three key variables:
-
-- **Energy**: Represents vitality. It drains over time and is replenished by eating.  
-- **Faith**: Indicates allegiance to one of the gods or "Agnostic" if unaligned.  
-- **Devotion**: A floating-point value between 0 and 1 representing how strongly a creature believes.
-
-### Core Actions
-
-| Action | Description | Energy Change |
-|---------|--------------|----------------|
-| Move | Basic exploration or evasion | -1 |
-| Eat | Consume food to regain energy | +25 |
-| Pray | Increases devotion, can trigger divine response | -5 |
-
-### Energy Model
-E(t + Δt) = E(t) - 0.10Δt - 0.12vΔt + f_eat + f_pray
-
-
-- Baseline energy drain: 0.10 per second  
-- Movement cost: 0.12 × velocity per second  
-- Eat adds 25 energy units  
-- Pray subtracts 5 energy units  
-- Death occurs when energy ≤ 0
-
-### Faith Conversion Model
-
-When a creature stands within a revelation beam from a god, it may convert to that god’s faith:
-
-λ = β * I * (1 - r/R) * (1 - d)
-P(convert) = 1 - exp(-λ * Δt)
-
-
-- β = 1.2 per second  
-- I = beam intensity (0 to 1)  
-- r = distance from beam center  
-- R = beam radius (6 units)  
-- d = creature’s current devotion  
-Conversion probability increases for closer, less devoted creatures.
+- **Adopt Religion:** After 2 refusals, entity must convert to a religion.  
+- **Donate Health / Build Church:** Devotion determines whether a creature contributes health to a church.  
+- **Consume:** Eat food to regain health.  
+- **Breed:** Reproduce with sufficient health and partner compatibility.  
+- **Fight (Not in MVP):** Will be triggered by overpopulation dynamics in future versions.
 
 ---
 
-## LLM Integration
+## **Religion & Churches**
 
-Each god uses a PHP backend script to interact with a different large language model API.  
-The script sends the current world state as JSON and receives a move in the following format:
+### **Gods (Faith Archetypes)**
 
-```json
-{"action":"Bless","x":-5,"y":12}
+| **God Type** | **Health Bonus** | **Breed Penalty** |
+|---------------|------------------|-------------------|
+| **Wary God** | +10% Health | -15% Breed |
+| **Balanced God** | ±0% | ±0% |
+| **Peaceful God** | +10% Breed | -15% Health |
+
+---
+
+### **Churches**
+Churches are communal structures built by health donations.  
+They amplify the religion’s effects and boost creature health at a given location.
+
+| **Church Level** | **Health Boost** |
+|-------------------|------------------|
+| **LVL 1** | +5% |
+| **LVL 2** | +10% |
+| **LVL 3** | +15% |
+
+Churches are created when cumulative donated health reaches certain thresholds.  
+Only 3 levels exist, increasing health benefits to nearby believers.  
+Churches are tied to the god's influence radius and affect nearby converts.
+
+---
+
+## **Core Simulation Loop**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Wander
+    Wander --> Eat : If food nearby
+    Wander --> Pray : If near divine source
+    Eat --> Rest
+    Pray --> Convert : If influenced by god
+    Convert --> Wander
+    Wander --> Reproduce : If health > threshold
+    Wander --> Donate : If near church & devotion high
+    Wander --> Die : If health ≤ 0
 ```
 
-Actions are executed in the simulation as follows:
-| Action     | Description               |
-| ---------- | ------------------------- |
-| Revelation | Converts nearby creatures |
-| Bless      | Creates food items        |
-| Curse      | Creates damaging hazards  |
+---
+## **Player Interaction**
 
-Each god acts once every 20 seconds.
-Only one LLM acts at a time, creating a rhythm of divine intervention across the simulation.
+While *Origins* is primarily an observer-driven simulation, players have minimal interactive tools to experiment with environmental dynamics:
 
-### Player Interaction
+| **Action** | **Description** |
+|-------------|-----------------|
+| **Left Click** | Place food or hazard |
+| **Spacebar** | Toggle between food and hazard |
+| **Cooldown** | 2 seconds between spawns (max 5 active objects) |
 
-| Control    | Function                                                |
-| ---------- | ------------------------------------------------------- |
-| Left Click | Place food or hazard depending on mode                  |
-| Spacebar   | Toggle between Good (food) and Bad (hazard)             |
-| Cooldown   | 2 seconds between placements, maximum of 5 active items |
+---
 
-The player is designed as a minor agent of chaos.
-The intention is for the player to observe rather than dominate.
+## **System Architecture**
 
-### Running the project (To be confirmed)
-1. Clone the repository
+### **Core Components**
+
+| **Component** | **Description** |
+|----------------|-----------------|
+| **Creatures** | Simulated agents with evolving behavior and belief |
+| **World** | Bounded 2D/3D space using physics & graphics |
+| **Churches** | Religious centers built through communal donation |
+| **Divine Radius** | Zone of religious influence tied to each god |
+| **Player Layer** | Optional layer for interaction (food/hazard drops) |
+
+---
+
+## **Behavior & Energy Models**
+
+### **Energy Depletion**
+
+**Formula:**  
+`E(t + Δt) = E(t) - 0.10Δt - 0.12vΔt + f_eat - f_pray`
+
+- **Drain:** 0.10/sec base + velocity-based tax  
+- **Eating:** +25 energy  
+- **Praying:** -5 energy  
+- **Death:** occurs if energy ≤ 0
+
+---
+
+### **Faith Conversion Model**
+
+**Equations:**
+`λ = β × I × (1 - r/R) × (1 - d)`
+`P(convert) = 1 - exp(-λ × Δt)`
+
+
+**Parameters:**
+- **β:** Base rate of conversion  
+- **I:** Intensity of divine presence  
+- **r:** Distance to divine source  
+- **R:** Max radius of god’s influence  
+- **d:** Creature’s existing devotion  
+
+---
+
+## **Technical Stack**
+
+- **JavaScript (ES6)** — Simulation logic  
+- **Three.js** — 3D rendering  
+- **Cannon-ES** — Physics engine  
+- **PHP** — Optional backend for LLM integrations  
+- **HTML/CSS** — UI layer  
+
+---
+
+## **Project Structure**
+
 ```
-git clone https://github.com/username/origins.git
-cd origins
+origins/
+├── frontend/
+│   ├── index.html
+│   ├── js/
+│   │   ├── world.js
+│   │   ├── creatures.js
+│   │   ├── churches.js
+│   │   └── ui.js
+│   └── css/
+│       └── style.css
+├── backend/
+│   ├── (Optional PHP for LLM/god logic)
+├── assets/
+│   ├── models/
+│   └── textures/
+└── README.md
 ```
-2. Host the project locally using PHP (required for LLM API calls):
-```
-php -S localhost:8000
-```
-3. Open a browser and navigate to:
-```
-http://localhost:8000/index.php
-```
-4. The simulation begins automatically.
-The PHP backend will contact the external APIs if valid API keys are provided in each ajaxgodX.php file.
 
-### Directory Summary
 
-| Directory   | Description                                   |
-| ----------- | --------------------------------------------- |
-| `frontend/` | Simulation logic, visuals, and user interface |
-| `backend/`  | PHP scripts for LLM API interaction           |
-| `assets/`   | Textures, models, and visual assets           |
-| `docs/`     | Design documentation and system diagrams      |
+---
 
-### Artistic Context
+## **Artistic Context**
 
-Origins was developed as a collaborative final project for ICA 25, a creative coding course hosted in the Mathcastles Discord.
-The course focuses on computation as a medium for art.
-The project draws inspiration from Mathcastles: Terraforms, algorithmic world-building, and the idea of procedural cosmology.
+This simulation was inspired by **generative art**, **agent-based modeling**, and **religious anthropology**.  
+It explores how faith emerges, how biological systems evolve, and how simple rules create complex behaviors.  
+*Origins* blends simulation aesthetics with game logic and spiritual metaphors—tapping into what it means to believe, to survive, and to contribute.
 
-Conceptually, the work examines how faith systems and hierarchies can emerge in code-based ecosystems.
-Each LLM acts as a deity, each creature as a believer, and the player as a limited creator.
-The piece asks how belief, authority, and survival intertwine in a world governed by algorithms.
+---
 
-### License
+## **Contributors**
 
-This project is released under a Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0).
-You may study, remix, and adapt the code for non-commercial purposes with attribution to the original authors.
+| **Name** | **Role** |
+|-----------|-----------|
+| **PlayPeng** | Team Lead, LLM Integration |
+| **Cyclez** | Systems Design, Game Logic |
+| **Patti** | Art, Visual Design |
+| **JJoy** | LLM Integration, Visuals |
+| **RaulOnAStool** | Systems Design, Simulation Mechanics |
 
-### Contributors
+---
 
-PlayPeng – Team Lead, LLM Integration
+## **License**
 
-Cyclez – Systems Design and Game Mechanics
+Released under **CC BY-NC 4.0**.  
+Feel free to remix and reuse non-commercially with proper attribution.
 
-Patti – Art and Visual Design
+---
 
-JJoy – Art and Visual Design, LLM Integration
+## **Acknowledgments**
 
-RaulOnAStool – Systems Design and Game Mechanics
-
-### Acknowledgments
-
-Developed for ICA 25 with guidance from 0x113d (Mathcastles).
-Thanks to the Mathcastles community for inspiring the exploration of computation as art.
+Created for **ICA 25: Art & Computation**  
+Guided by **@0x113d** and the **Mathcastles community**  
+Thank you to the **ICA 25 cohort** for the inspiration, chaos, and feedback.

@@ -1,0 +1,8 @@
+# Optional: ignore temporary system files
+.DS_Store
+Thumbs.db
+
+# Optional: ignore common development environment files
+node_modules/
+.env
+cyclez-docs/RIASSUNTO_COMPLETO.txt

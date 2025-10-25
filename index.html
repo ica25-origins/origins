@@ -1271,7 +1271,7 @@
         revlights.splice(takeout, 1);
       }
 
-      for (me = 0; me < creatures.length; me++)
+      for (me = 0; me < creatures.length; me++) // Loops all the creatures - OUTER LOOP, activated each frame.
         if (creatures[me].health > 0) {
           let c = creatures[me];
           if (c.currentProg === null)
@@ -1402,7 +1402,7 @@
     var uptoAI = 1;
 
     function askGod() { //5 seconds loop - which God is operating the Turn - encoding of the url with creatures data
-      if (++uptoAI > 3) uptoAI = 1; //Avoids the same god to operate twice. Set 3 to operate with RNG God
+      if (++uptoAI > 3) uptoAI = 1; //Avoids the same god to operate twice. Set 5 to operate with RNG God
 
       /* Creates Creatures Array */
       let l = creatures.length;

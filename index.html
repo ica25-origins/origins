@@ -109,7 +109,7 @@
     let dcounter = 0;
     let goodbad = 0;  // 0 = good, 1 = bad
     let gods = ['Agnostic', 'Gemini', 'Claude', 'Amazon-Nova', 'GPT'];
-    let gcol = [0, 60, 300, 240];
+    let gcol = [0, 60, 300, 240, 360];
     let glast = ['', '', '', '', ''];
     const size = 128;
     const segments = 512;
@@ -1225,13 +1225,13 @@
         else {
           let fac = r.intensity / 30;
           for (let e = 0; e < creatures.length; e++)
-            if (creatures[e].health > 0) {
-              let ce = creatures[e];
+            if (creatures[e].health > 0) { //add && ce.faith==Agnostic
+              let ce = creatures[e]; //single creature pick
               let h = Math.hypot(r.beam.position.x - ce.position.x, r.beam.position.z - ce.position.z);
-              if (h < 5) {
-                fac = r.intensity * (6 - h) / 150;
-                if (ce.faith != r.god)
-                  if (Math.random() < fac) {
+              if (h < 5) { //If entity distance from the beam is <5
+                fac = r.intensity * (6 - h) / 150; //conversion probability formula
+                if (ce.faith != r.god) //if entity not already converted. FAITH parameter
+                  if (Math.random() < fac) { //RNG on adeption
                     ce.faith = r.god;
                     ce.halo.material.opacity = 1;
                     ce.halo.material.color = new THREE.Color(hsvToRgb(gcol[r.god], 1, 1, 0));
@@ -1332,11 +1332,11 @@
               if (Math.abs(c.position.y - danger.box.position.y) < 3)
                 if (Math.abs(c.position.z - danger.box.position.z) < 3) {
                   var dst = 1 + Math.hypot(c.position.x - danger.box.position.x, c.position.y - danger.box.position.y);
-                  c.health -= 6 * danger.strength / dst;
+                  c.health -= 6 * danger.strength / dst; //Curse Damage formula
                 }
           });
           if (--c.cooldown <= 0) c.currentProg = getProgram();
-          c.health -= 0.03 * Math.sqrt(c.creatureSize);
+          c.health -= 0.03 * Math.sqrt(c.creatureSize); //CURSE FORMULA
           if (c.health <= 0) {
             scene.remove(c);
             world.removeBody(c.body);
@@ -1401,8 +1401,8 @@
     var xmlhttp;
     var uptoAI = 1;
 
-    function askGod() {
-      if (++uptoAI > 3) uptoAI = 1; //Which God operates in this turn. Set 3 to operate with RNG God
+    function askGod() { //5 seconds loop - which God is operating the Turn - encoding of the url with creatures data
+      if (++uptoAI > 3) uptoAI = 1; //Avoids the same god to operate twice. Set 3 to operate with RNG God
 
       /* Creates Creatures Array */
       let l = creatures.length;
@@ -1413,8 +1413,8 @@
           summ.push("" + m.position.x.toFixed(2) + "~" + m.position.z.toFixed(2) + "~" + m.health.toFixed(2) + '~' + m.faith); //FAITH perché lo prende?
       }
       xmlhttp = GetXmlHttpObject();
-      //var url = "FILENAMEROOT" + AI Id + ".php?lst=" + glast[uptoAI] + "&s=" + summ.join('^');
-      var url = "ajaxgod" + uptoAI + ".php?lst=" + glast[uptoAI] + "&s=" + summ.join('^');
+      //var url = "Filename Root" + AI Id + ".php?lst=" + Last God's action performed[uptoAI] + "&s=" + All Creatures Parameters
+      var url = "ajaxgod" + uptoAI + ".php?lst=" + glast[uptoAI] + "&s=" + summ.join('^'); // glast[god] = m.action; Rows 1469-1476
       switch (uptoAI) {
         case 1: xmlhttp.onreadystatechange = stateChanged1; break;
         case 2: xmlhttp.onreadystatechange = stateChanged2; break;
@@ -1466,6 +1466,9 @@
       }
     }
 
+
+    // CONNECT BACKEND HERE 
+
     function doGodsWork(god, m) {
       if (Math.random() < 0.1) {
         m.action = 'Immaculate';
@@ -1475,7 +1478,7 @@
       headdisplay(gods[god] + ' plays ' + m.action, god);
       glast[god] = m.action;
       if (m.action == 'Revelation') {
-        revlights.push(new RevLight(god, m.x, m.y));
+        revlights.push(new RevLight(god, m.x, m.y)); //god, beam coordinates
       }
       if (m.action == 'Bless') {
         for (let i = 0; i < 3; i++) {
@@ -1499,6 +1502,8 @@
       }
       //        console.log(gods[god]+' => '+JSON.stringify(m));
     }
+
+    // Graphic functions
 
     var headop = 2;
 

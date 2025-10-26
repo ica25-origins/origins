@@ -1,0 +1,327 @@
+# Complete Summary - AI Gods Game Project
+
+## Overview
+
+Type: 3D game with competitive AIs (Gemini, Claude, Grok, GPT)
+Technologies: Three.js (graphics), Cannon.js (physics), PHP (AI backend)
+Cycle: Every 5 seconds an AI makes a move (Revelation/Bless/Curse)
+
+---
+
+## System Architecture
+
+Frontend (index.html)
+- 3D rendering with Three.js
+- 5 initial creatures that move autonomously
+- Game loop at 60 FPS
+
+Backend (ajaxgod1-4.php)
+- 4 PHP files (one for each AI)
+- Every 5s: collect state → call AI API → return JSON action
+- Critical bug: ajaxgod2.php and ajaxgod4.php missing `$gods` array definition
+
+---
+
+## AI System
+
+AJAX Flow (every 5 seconds):
+1. Frontend: collects creature states (x, z, hp, faith)
+2. JavaScript: sends GET to ajaxgod{N}.php?lst={last_action}&s={creatures}
+3. PHP: decodes + formats prompt
+4. PHP: calls AI API (Gemini/Claude/Groq)
+5. AI: returns JSON {"action":"...", "x":..., "y":...}
+6. PHP: validates + returns {"success":true, "message":"{...}"}
+7. Frontend: executes the action in the game
+
+Parameter `lst`:
+- lst=Bless → AI CANNOT repeat Bless (anti-spam constraint)
+- Refers to AIs, not creatures
+
+3 AI Actions:
+1. Revelation: Cone light → converts faith of nearby creatures
+2. Bless: Spawns 3 Targets (green cubes) → +20 HP if collected
+3. Curse: Spawns 1 Danger (red tetrahedron) → damages nearby creatures
+
+---
+
+## Creature System (Entities)
+
+Attributes (class SpriteCreature):
+this.health = 100;           // HP
+this.creatureSize = 1.0;     // Size (grows +10% per target)
+this.faith = 0;              // 0 = Agnostic, 1-4 = specific AI
+this.currentProg = pursue;   // Current behavior (function)
+this.cooldown = 0;           // Behavior switch timer
+this.lockedTarget = 0;       // Currently pursued target
+
+Missing (from design doc):
+- breed (fertility)
+- devotion (religious dedication)
+
+Implemented Behaviors:
+
+PURSUE (50%): Chases the nearest target (green cubes)
+function pursue() {
+  target = findTarget();  // Finds nearest green cube
+  moveToward(target);     // Moves toward it (0.1 units/frame)
+}
+
+EVADE (30%): Flees from other creatures
+function evade() {
+  nearest_creature = nearest(5);  // Searches for creature within radius 5
+  moveAway(nearest_creature);     // Moves away (0.1 units/frame)
+}
+// Note: purely cosmetic! No damage from creature-creature collisions.
+
+HAVEREST (20%): Stays still
+function haverest() {
+  // Literally empty
+}
+
+Probabilities (with health < 25 increases pursue to 90%):
+function getProgram() {
+  r = random();
+  if (health < 25) r += 0.4;  // Bug: more aggressive when wounded
+  if (r < 0.2) return haverest;
+  if (r < 0.5) return evade;
+  return pursue;
+}
+
+---
+
+## HP System
+
+Decay (line 938):
+c.health -= 0.03 * Math.sqrt(c.creatureSize);
+
+Every frame (60 FPS):
+- Size 1.0: -1.8 HP/s → death in 55 seconds
+- Size 2.0: -2.5 HP/s → death in 39 seconds
+
+Saved in: /mnt/user-data/outputs/Decay.txt
+
+Only HP Source: Target (Green Cubes)
+
+Automatic collection (line 906-928):
+if (distance_to_target < 1) {
+  c.health += 20;           // +20 HP
+  c.creatureSize *= 1.1;    // +10% size
+  target.captured = 1;      // Disappears
+  c.currentProg = getProgram(); // New behavior
+}
+
+3 Target Sources:
+1. Initial spawn: 3 targets at startup
+2. Bless AI: 3 targets per action (every ~20s per AI)
+3. User double-click: 1 manual target (testing)
+
+Not existing: Potions, separate food, natural regeneration
+
+---
+
+## Game Objects
+
+Target (green cubes)
+- Spawn: Bless (3×), initial spawn (3×), double-click (1×)
+- Effect: +20 HP, +10% size when collected
+- Physics: Has CANNON.Body, falls and bounces
+
+Danger (red tetrahedrons)
+- Spawn: Curse (1×), double-click+spacebar (1×)
+- Effect: -6 × strength ÷ distance HP/frame (radius 3)
+- Lifetime: strength decreases -0.002/frame, disappears at 0
+
+RevLight (conic light)
+- Spawn: Revelation (1×)
+- Effect: Converts faith of creatures within radius 5
+- Lifetime: ~3 seconds (fade in 0.5s, fade out 2.5s)
+- Visual: Draws a colored pattern on creature texture
+
+---
+
+## Non-Implemented Behaviors
+
+From MVP Design Doc:
+- BREED: Creature reproduction (with HP cost, cooldown, offspring)
+- BUILD: HP donation for church (victory condition)
+- GATHER: Explicit action to search for scattered food
+
+Current: Only pursue/evade/rest with passive target system
+
+---
+
+## Spawn and Frequencies
+
+Initial Spawn (one time):
+- 5 creatures (random positions -5 to +5)
+- 3 targets (random positions -20 to +20)
+
+Dynamic Spawn (events):
+Every 5 seconds (1 AI plays):
+- Revelation → 1 RevLight (lasts ~3s)
+- Bless → 3 Targets (permanent until collected)
+- Curse → 1 Danger (lasts ~500 frames = 8s)
+
+Manual (user):
+- Double-click → 1 Target or 1 Danger
+
+Zero High-Frequency Spawn:
+- No continuous auto-spawn system
+- No particle system
+- No random food spawning
+
+---
+
+## Known Bugs and Limitations
+
+Critical Bugs:
+1. ajaxgod2.php, ajaxgod4.php: Missing `$gods` array (line 6)
+2. ajaxgod1.php: Gemini parsing fragile (assumes exactly 3 lines)
+3. getProgram(): Health < 25 increases pursue instead of rest (counterintuitive)
+
+Design Limitations:
+1. EVADE useless: No creature-creature collision, purely aesthetic
+2. Creatures do not avoid Danger: they walk into it and die
+3. No pathfinding: creatures get stuck on terrain
+4. API keys hardcoded: plaintext inside PHP files
+
+Missing Features:
+- Breed, Build, Gather (40% of MVP unimplemented)
+- Breed/Devotion attributes
+- Victory condition (church)
+- Action probability system based on parameters
+
+---
+
+## File Structure
+
+/mnt/project/
+├── index.html           # Frontend (1119 lines)
+├── ajaxgod1.php         # Backend Gemini
+├── ajaxgod2.php         # Backend Claude (BUG: missing $gods)
+├── ajaxgod3.php         # Backend Random
+├── ajaxgod4.php         # Backend GPT (BUG: missing $gods)
+├── keyst.png            # UI controls
+├── Game_Mechanics_-_MVP.txt         # Complete design doc
+└── Game_Mechanics_-_MVP_v2_-_No_Scheme.txt  # Design without diagrams
+
+---
+
+## Backend Contract
+
+Input (from Frontend):
+GET ajaxgod{1-4}.php?lst={lastAction}&s={creatures}
+
+Parameters:
+- lst: "Revelation"|"Bless"|"Curse"|"" (last action)
+- s: "x~z~hp~faith^x~z~hp~faith^..." (creature states)
+
+Example:
+ajaxgod1.php?lst=Bless&s=12.50~-3.20~85.00~2^-5.10~8.70~42.00~0
+
+Output (to Frontend):
+{
+  "success": true|false,
+  "message": "{"action":"Revelation","x":10,"y":-5}"
+}
+
+---
+
+## Backend Intervention Points
+
+High Priority:
+1. Fix missing `$gods` array (ajaxgod2, ajaxgod4)
+2. Improve Gemini parsing (robust regex)
+3. Input/output validation
+4. Error handling (curl errors, timeout)
+
+Improvements:
+1. API abstraction layer
+2. Rate limiting
+3. Structured logging
+4. Mock AI responses for testing
+5. Separate API keys from code
+
+---
+
+## Generated Output Files
+
+/mnt/user-data/outputs/
+├── ajax_flow_complete.txt          # Detailed AJAX flow
+├── backend_blackbox_analysis.txt   # Backend input/output analysis
+├── lst_parameter_explanation.txt   # Parameter lst explanation
+├── entity_behaviors_code.txt       # Creature behaviors
+├── evade_pursue_clarification.txt  # EVADE≠Curse, PURSUE≠Bless
+├── evade_cosmetic_only.txt         # EVADE purely cosmetic
+├── health_decay_explained.txt      # HP decay formula (full)
+├── Decay.txt                       # HP decay (recallable)
+├── Harvest_Logic.txt               # GATHER not implemented
+└── HP_Sources.txt                  # HP sources in the game
+
+---
+
+## Current Core Mechanic
+
+Main loop:
+1. Creatures move (pursue/evade/rest)
+2. Constant HP loss (-1.8 HP/s base)
+3. AIs play actions every 5s
+4. Bless spawns targets → creatures collect → +20 HP
+5. Curse spawns danger → creatures take damage
+6. Revelation converts faith
+7. Creatures die if HP ≤ 0
+
+HP Economy:
+- Without Bless → all creatures die in <1 minute
+- About 1 Bless every 30s needed for stable population
+- Target compensates ~11 seconds of decay
+
+Autonomous Creatures:
+- AIs influence INDIRECTLY (object spawning)
+- No direct AI → creature commands
+- Probabilistic behaviors every 4–7 seconds
+
+---
+
+## Key Concepts
+
+1. Data flow: Frontend ↔ PHP ↔ AI API
+2. Behaviors: Autonomous, probabilistic, with cooldown
+3. HP: Single source = Target, continuous decay
+4. AI actions: Only 3 (Revelation/Bless/Curse), no repeat
+5. Target system: Replaces GATHER from design doc
+6. EVADE: Purely aesthetic (no creature-creature damage)
+7. Backend: 3 editable steps (decode, call, validate)
+
+---
+
+## Key Questions Solved
+
+- lst is AI constraint, not creature constraint
+- EVADE has no HP implications (visual only)
+- PURSUE chases any target (not only from Bless)
+- GATHER does not exist (design doc only)
+- Only HP source = Target (3 spawn methods)
+- Zero high-frequency spawn
+- Decay formula: 0.03 × √size each frame
+
+---
+
+## Next Steps
+
+If you want to develop the backend:
+- Focus on 3 backend steps (decode/call/validate)
+- Fix critical bugs first
+- Use /mnt/user-data/outputs/backend_blackbox_analysis.txt
+
+If you want to implement MVP features:
+- Breed/Build/Gather missing
+- Breed/Devotion attributes not implemented
+- Reference: Game_Mechanics_-_MVP.txt
+
+If you want to improve creature AI:
+- Fix health < 25 bug
+- Add Danger avoidance
+- Implement pathfinding
+
+Call "Decay" to review the complete HP decay explanation.

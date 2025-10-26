@@ -1,0 +1,264 @@
+# Game Design Specification
+
+## Entity System
+
+### Core Attributes
+- **Health (HP)**: Spawn at 30-40
+- **Breed**: 0-100 (fertility/reproduction ability)
+- **Devotion**: 0-100 (religious dedication)
+- **Faith**: Agnostic (default spawn) → Can be converted once to God 1, God 2, or God 3
+
+
+
+
+### Constraints
+- Minimum HP to survive: 20
+- Minimum HP to Gather: 20
+- Maximum HP cap: 100 (cannot exceed)
+- Minimum HP to Breed: 70 (Agnostics CANNOT breed)
+- Minimum HP to Build: 70
+
+@ Some Entities could die before getting a religion due to HP drain time + no rng picks of gathering. Some, don't survive.
+
+---
+
+## Deities
+
+| Faith | Health Effect | Breed Effect | Breed Cost | Special Rules |
+|-------|--------------|--------------|------------|---------------|
+| **Agnos** | Neutral | N/A | N/A | Cannot Breed, only Gather/Nothing |
+| **God 1** | +25% | -30% | 50 HP | Health-focused strategy |
+| **God 2** | -20% | +30% Breed Capability, HP drop to 25 instead of 20 (for God 1 and 2)| 35 HP | Breed-focused (reduced cost) |
+| **God 3** | Neutral | Neutral | 50 HP | Balanced approach |
+
+@ Each effect gets applied once, on adeption.
+
+### Conversion Mechanics
+- Gods can convert **Agnostic** entities to their Faith
+- Conversion is **permanent** (no further conversions possible)
+- Conversion mechanic details: TBD
+
+### Victory Condition
+First deity to complete Church construction (1000 HP donated)
+
+---
+
+## Actions
+
+### 1. BREED ❌ (Not Available to Agnostics)
+
+**Requirements:**
+- Must have Faith (God 1, 2, or 3)
+- Minimum 70 HP
+
+**Duration:** 5 minutes (entity frozen in position)
+
+**Cost:** -50 HP (God 1/3) OR -35 HP (God 2)
+
+**Result:**
+- Success OR Failure → HP drops to 20 (God 1 or 3) - HP drops to 25 (God 2)
+- Success: +1 newborn entity (same Faith as parent)
+- Failure: No offspring, same HP penalty.
+- 8-minute cooldown (can only perform Nothing)
+
+**Offspring Stats:**
+- Inherits parent's Faith
+- Starts with 30-40 HP (random)
+- Random Breed/Devotion (0-100)
+- 5-minute cooldown (can only perform Nothing)
+
+---
+
+### 2. BUILD ❌ (Not Available to Agnostics)
+
+**Requirements:**
+- Must have Faith (God 1, 2, or 3)
+- Minimum 70 HP
+
+**Donation Formula:**
+
+| Devotion Range | HP Donation | Result |
+|----------------|-------------|---------|
+| 0-50 | 20-40% of current HP | Safe donation |
+| 51-80 | 41-60% of current HP | Moderate risk |
+| 81-95 | 61-75% of current HP | High risk |
+| 96-100 | 76-99% of current HP | **EXTREME SACRIFICE** (likely soft-lock) |
+
+**Post-Donation:**
+- 8-minute cooldown (Nothing only)
+- High-Devotion entities (95-100%) will likely drop below 20 HP → permanent Nothing state (**INTENDED DESIGN**)
+
+---
+
+### 3. GATHER ✅ (Available to All)
+
+**Requirements:**
+- Minimum 20 HP
+- HP < 100 (cannot Gather at max HP)
+
+**Mechanics:**
+- Entity wanders randomly, collecting Food to restore HP
+- HP Cap: Stops at 100 HP maximum
+- Resource: Food availability unlimited (for now)
+- Special Rule: If entity at 100 HP randomly selects Gather → action converts to **NOTHING**
+
+---
+
+### 4. NOTHING ✅ (Available to All)
+
+**Behavior:** Random wandering with no resource interaction
+
+**When Mandatory:**
+- Newborn cooldown (5 min)
+- Post-Build cooldown (8 min)
+- Post-Breed cooldown (8 min)
+- HP below 20 (soft-lock state)
+- HP at 100 AND Gather selected
+- Agnostics default behavior (alongside Gather)
+
+---
+
+## Resources
+
+### Food
+- Scattered across map
+- Restores HP when Gathered (up to 100 HP cap)
+- No scarcity mechanics (mvp)
+
+### Church Construction
+- **Requirement:** 1000 HP total donated (cumulative per Faith)
+- **Progress:** Sum of all Build donations from followers
+- **Win Condition:** First church completed
+
+---
+
+## Game Logic Flow
+```
+ENTITY LIFECYCLE:
+
+[Spawn: 30-40 HP, Random Breed/Devotion, Faith = AGNOSTIC]
+    |
+    v
+┌─────────────────────────────────────┐
+│   AGNOSTIC STATE (Initial)          │
+│   Actions: GATHER or NOTHING only   │
+└─────────────────────────────────────┘
+    |
+    v
+[CONVERSION EVENT] ← Gods actively recruit
+    |
+    v
+┌─────────────────────────────────────┐
+│   FAITHFUL STATE (God 1/2/3)        │
+│   Gains: BREED, BUILD actions       │
+│   Effects: Deity modifiers applied  │
+└─────────────────────────────────────┘
+    |
+    v
+┌─────────────────────────────────────┐
+│     DECISION LOOP (Every Tick)      │
+└─────────────────────────────────────┘
+```
+
+### HP Management
+- HP Range: 20 (soft minimum) to 100 (hard cap)
+- Gather: Restores HP, stops at 100
+- At HP = 100: Gather selection → converts to NOTHING
+- Below HP = 20: Permanent NOTHING (soft-lock)
+
+### Breed Mechanics (5-minute duration)
+- Requires HP ≥ 70
+- Entity frozen in position for 5 minutes
+- Random success check (based on Breed parameter)
+- HP Cost: -50 HP (God 1/3) OR -35 HP (God 2)
+- Result: HP → 20 (regardless of success)
+  - Success: +1 Entity (30-40 HP, same Faith, 5-min cooldown)
+  - Failure: No offspring
+
+### Build Mechanics
+- Requires HP ≥ 70
+- Donation: Variable % based on Devotion (20%-99%)
+- Church Progress += Donated HP
+- Post-Donation:
+  - 8-min cooldown (Nothing only)
+  - Random HP target (20-70) assigned
+  - If HP < 20: PERMANENT Nothing state (sacrifice complete)
+
+### Deity Effects (Applied at Conversion)
+- God 1: Health × 1.40, Breed × 0.70, Breed Cost = 50 HP
+- God 2: Health × 0.80, Breed × 1.50, Breed Cost = 35 HP
+- God 3: No modifiers, Breed Cost = 50 HP
+
+---
+
+## Action Probabilities
+
+### Agnostic Entities (All HP levels)
+```
+IF HP < 100:
+  - GATHER: 50%
+  - NOTHING: 50%
+
+IF HP = 100:
+  - NOTHING: 100% (Gather blocked)
+```
+
+### Faithful Entities - HP ≥ 70 (Full Actions Available)
+```
+IF HP < 100:
+  - BREED: 0-35% (scaled by Breed parameter)
+    └─ Breed = 0   → 0% chance
+    └─ Breed = 50  → 17.5% chance
+    └─ Breed = 100 → 35% chance
+
+  - BUILD: 10-35% (scaled by Devotion parameter)
+    └─ Devotion = 0   → 10% chance
+    └─ Devotion = 50  → 22.5% chance
+    └─ Devotion = 95+ → 35% chance
+
+  - GATHER: 30-50%
+  - NOTHING: 30-50%
+
+IF HP = 100:
+  - BREED: 0-35% (scaled by Breed parameter)
+  - BUILD: 10-35% (scaled by Devotion parameter)
+  - GATHER: 0% → converts to NOTHING
+  - NOTHING: 30-50% + (redirected Gather attempts)
+```
+
+### Faithful Entities - HP 20-69 (Limited Actions)
+```
+- GATHER: 50%
+- NOTHING: 50%
+```
+
+### HP < 20 (Soft-locked - Sacrificial State)
+```
+- NOTHING: 100%
+```
+
+### Cooldown States
+```
+- Newborn: NOTHING 100% (5 minutes)
+- Post-Build: NOTHING 100% (8 minutes)
+```
+
+---
+
+## Deity Balance Summary
+
+| Deity | Strategy | Strength | Weakness |
+|-------|----------|----------|----------|
+| **God 1** | Slow growth, high durability | Followers survive longer, steady donations | Slow population expansion |
+| **God 2** | Fast breeding, fragile | Rapid follower growth, cheaper breeding | Lower HP = more deaths, weaker donations |
+| **God 3** | Balanced | No extreme weaknesses | No extreme strengths |
+
+---
+
+## Key Design Pillars
+
+1. **Conversion is Critical**: Agnostics are useless for church-building → Gods must actively recruit
+2. **High Devotion = Martyrdom**: Entities with 95-100% Devotion will sacrifice themselves entirely (soft-lock is INTENTIONAL)
+3. **Breed Duration**: 5-minute frozen state creates strategic vulnerability (entities can't gather/dodge during breeding)
+4. **God 2 Advantage**: Reduced breed cost (35 HP vs 50 HP) enables faster population growth despite HP penalty
+5. **No Entity Death**: Soft-locked entities (HP < 20) remain on map doing Nothing (thematic "living sacrifice")

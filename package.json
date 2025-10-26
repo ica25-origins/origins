@@ -1,0 +1,30 @@
+{
+    "name": "origins",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "node server.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "dotenv": "^16.3.1",
+        "cors": "^2.8.5"
+    },
+    "description": "## **Overview** **Origins** is a generative life simulation built in **JavaScript** and **Three.js**.   The project was developed for **ICA 25**, a creative coding course in the **Mathcastles Discord**, and explores themes of emergence, belief, biology, and systemic complexity in autonomous agent-based systems.",
+    "main": "index.js",
+    "directories": {
+        "doc": "docs"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/cyclez/origins.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/cyclez/origins/issues"
+    },
+    "homepage": "https://github.com/cyclez/origins#readme"
+}

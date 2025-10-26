@@ -1,3 +1,33 @@
+# **How to test**
+
+## **1. Install Ollama**
+
+**TBD** 
+
+## **2. Install Vercel**
+
+**Vercel** allows serverless local deployment:
+**npm install -g vercel**
+
+set project root and call:
+**vercel dev**
+/* more infos on settings incoming */
+
+It creates a server on http://localhost:3000 and servers automatically **index.html**, while activating LLMs API routes.
+It needs no dependencies installed.
+
+
+--------------------
+
+
+# **Overview**
+**Origins** is a generative life simulation built in **JavaScript** and **Three.js**.  
+The project was developed for **ICA 25**, a creative coding course in the **Mathcastles Discord**, and explores themes of emergence, belief, biology, and systemic complexity in autonomous agent-based systems.
+
+---
+
+
+
 # **Origins**
 
 ## **Overview**

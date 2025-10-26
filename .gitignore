@@ -5,6 +5,10 @@ Thumbs.db
 # Optional: ignore common development environment files
 node_modules/
 .env
+.vercel
 cyclez-docs/RIASSUNTO_COMPLETO.txt
 cyclez-docs/Blackboard.txt
 cyclez-docs/map_modificato_schema.html
+
+
+

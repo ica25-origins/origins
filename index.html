@@ -33,7 +33,10 @@
     import * as THREE from 'three';
     import * as CANNON from "cannon-es";
     import * as BufferGeometryUtils from 'https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/utils/BufferGeometryUtils.js';
-
+    import { askGemini } from 'entities/gods/ai-handlers/aiCallGod1.js';
+    import { askClaude } from 'entities/gods/ai-handlers/aiCallGod2.js';
+    import { askRandom } from 'entities/gods/ai-handlers/aiCallGod3.js';
+    import { askGroq } from 'entities/gods/ai-handlers/aiCallGod4.js';
     const world = new CANNON.World({
       gravity: new CANNON.Vec3(0, -9.82, 0)
     });
@@ -1401,7 +1404,8 @@
     var xmlhttp;
     var uptoAI = 1;
 
-    function askGod() { //5 seconds loop - which God is operating the Turn - encoding of the url with creatures data
+    /* askGod() ASYNC VERSION */
+    async function askGod() { //5 seconds loop - which God is operating the Turn - encoding of the url with creatures data
       if (++uptoAI > 3) uptoAI = 1; //Avoids the same god to operate twice. Set 5 to operate with RNG God
 
       /* Creates Creatures Array */
@@ -1412,17 +1416,21 @@
         if (m.health > 0)
           summ.push("" + m.position.x.toFixed(2) + "~" + m.position.z.toFixed(2) + "~" + m.health.toFixed(2) + '~' + m.faith); //FAITH perché lo prende?
       }
-      xmlhttp = GetXmlHttpObject();
-      //var url = "Filename Root" + AI Id + ".php?lst=" + Last God's action performed[uptoAI] + "&s=" + All Creatures Parameters
-      var url = "ajaxgod" + uptoAI + ".php?lst=" + glast[uptoAI] + "&s=" + summ.join('^'); // glast[god] = m.action; Rows 1469-1476
-      switch (uptoAI) {
-        case 1: xmlhttp.onreadystatechange = stateChanged1; break;
-        case 2: xmlhttp.onreadystatechange = stateChanged2; break;
-        case 3: xmlhttp.onreadystatechange = stateChanged3; break;
-        case 4: xmlhttp.onreadystatechange = stateChanged4; break;
+
+      //Handler array maps AI IDs to their respective call functions
+      const handlers = [null, askGemini, askClaude, askRandom, askGroq];
+      const creaturesData = summ.join('^'); //All Creatures Parameters
+
+      try {
+        //Calls the corresponding AI with last action and creatures data
+        const result = await handlers[uptoAI](creaturesData, glast[uptoAI]); // glast[god] = m.action; Rows 1469-1476
+        if (result.success) {
+          doGodsWork(uptoAI, JSON.parse(result.message));
+        }
+      } catch (error) {
+        console.error(`God ${uptoAI} failed:`, error);
       }
-      xmlhttp.open("GET", url, true);
-      xmlhttp.send(null);
+
       setTimeout(askGod, 5000); //Call again askGod() in 5 seconds
     }
 

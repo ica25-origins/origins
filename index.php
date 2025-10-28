@@ -14,9 +14,6 @@
 </script>    
 </head>
 <body style="overflow:hidden; font-family:sans-serif">
-<div style="position:fixed; top:1vh; left:1vw; width:6vw; background-color:transparent; z-index:10">
-<img src="keyst.png" style="width:100%">
-</div>
 <div style="position:fixed; top:1vh; right:1vw; background-color:white; color:#222; border:1px solid #222; padding:5px; z-index:99; text-align:center">
 <b>Information</b><br><br>
 <div id="info"></div>
@@ -24,6 +21,7 @@
 </div>
 
 <div id="headdiv" style="position:fixed; top:3px; left:0px; width:100vw; color:yellow; font-weight:bold; text-align:center; font-size:2em; z-index:99"></div>
+<div style="position:fixed; bottom:0px; left:0px; width:100vw; color:white; background-color:transparent" id="debug"></div>
 <script type="module">
 import * as THREE from 'three';
 import * as CANNON from "cannon-es";
@@ -80,7 +78,7 @@ class TerrainGenerator {
       frequency *= 2;    // Each octave has finer detail
     }
     
-    return height/6;
+    return height/7;
   }
 }
 
@@ -101,13 +99,20 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 let tcounter = 0;
-let dcounter=0;
+let dcounter=0, ccounter=0;
 let goodbad=0;  // 0 = good, 1 = bad
 let gods=['Agnostic','Gemini','Claude','Amazon-Nova','GPT'];
 let gcol=[0,60,300,240];
 let glast = ['','','','',''];
 const size = 128;
 const segments = 512;
+let me =0;
+let cme = null;
+window.cme = cme;
+let savedir=0;
+let trackme = 0;
+let gamepause = 0;
+
 const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
 geometry.rotateX(-Math.PI / 2); // rotate plane horizontal (XZ plane)
 
@@ -361,15 +366,19 @@ class SpriteCreature extends THREE.Group {
     this.bodyMaterial = null;
     this.staticMaterials = {};
     this.position.set(x,0,z);
+    this.facedir = 0;
+    this.number= ++ccounter;
     this.createMaterials();
     this.createCreature();
     this.scale.setScalar(size);
-    this.cooldown = 0;
     this.lockedTarget = 0;
     this.currentProg = null;
     this.health = 100;
     this.faith = faith;
+    this.devotion = Math.random()*100;
     this.mode = 0;
+    this.decision=0;
+    this.myEgg = null;
     this.birthdate = Date.now();
     const cylinderShape = new CANNON.Cylinder(0.2, 0.6, 1.3, 16);
     this.halo.material.color = new THREE.Color(hsvToRgb(gcol[this.faith],1,1,0));
@@ -382,24 +391,25 @@ class SpriteCreature extends THREE.Group {
   }
   
   createMaterials() {
-     this.canvas = document.createElement('canvas');
+    this.canvas = document.createElement('canvas');
     this.canvas.width = 256;
     this.canvas.height = 256;
     
     const ctx = this.canvas.getContext('2d');
     this.drawBodyTexture(ctx);
     
-     this.bodyTexture = new THREE.CanvasTexture(this.canvas);
+    this.bodyTexture = new THREE.CanvasTexture(this.canvas);
     this.bodyTexture.generateMipmaps = false;
     this.bodyTexture.minFilter = THREE.LinearFilter;
     this.bodyTexture.magFilter = THREE.LinearFilter;
     
-    this.bodyMaterial = new THREE.MeshLambertMaterial({
-      map: this.bodyTexture,
-      transparent: true,
-      side: THREE.DoubleSide
-    });
-    
+    this.bodyMaterial = new THREE.MeshStandardMaterial({
+  map: this.bodyTexture,
+  emissiveMap: this.bodyTexture,
+  emissive: new THREE.Color(0xffffff),
+  emissiveIntensity: 1.3,
+  side: THREE.DoubleSide
+});    
      this.staticMaterials = {
       head: new THREE.MeshLambertMaterial({
         color: 0xffb347, // Orange
@@ -454,38 +464,39 @@ class SpriteCreature extends THREE.Group {
     
 
     const armGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 6);
+    armGeometry.translate(0,-0.45,0);
     
-    const leftArm = new THREE.Mesh(armGeometry, this.staticMaterials.limbs);
-    leftArm.position.set(-0.8, 0.2, 0);
-    leftArm.rotation.z = -Math.PI * 0.4;
-    leftArm.name = 'leftArm';
-    leftArm.castShadow = true;
-    this.add(leftArm);
+    this.leftArm = new THREE.Mesh(armGeometry, this.staticMaterials.limbs);
+    this.leftArm.position.set(-0.2, 0.2, 0);
+    this.leftArm.rotation.z = -Math.PI * 0.25;
+    this.leftArm.name = 'leftArm';
+    this.leftArm.castShadow = true;
+    this.add(this.leftArm);
     
-    const rightArm = new THREE.Mesh(armGeometry, this.staticMaterials.limbs);
-    rightArm.position.set(0.8, 0.2, 0);
-    rightArm.rotation.z = Math.PI * 0.4;
-    rightArm.name = 'rightArm';
-    rightArm.castShadow = true;
+    this.rightArm = new THREE.Mesh(armGeometry, this.staticMaterials.limbs);
+    this.rightArm.position.set(0.2, 0.2, 0);
+    this.rightArm.rotation.z = Math.PI * 0.25;
+    this.rightArm.name = 'rightArm';
+    this.rightArm.castShadow = true;
 
-    this.add(rightArm);
+    this.add(this.rightArm);
     
     // Hands (small spheres) - attached to arms
     const handGeometry = new THREE.SphereGeometry(0.12, 8, 6);
     
     const leftHand = new THREE.Mesh(handGeometry, this.staticMaterials.hands);
-    leftHand.position.set(0, -0.5, 0); // Relative to arm center
+    leftHand.position.set(0, -0.92, 0); 
     leftHand.name = 'leftHand';
     leftHand.castShadow = true;
 
-    leftArm.add(leftHand); // Make hand a child of arm
+    this.leftArm.add(leftHand); // Make hand a child of arm
     
     const rightHand = new THREE.Mesh(handGeometry, this.staticMaterials.hands);
-    rightHand.position.set(0, -0.5, 0); // Relative to arm center
+    rightHand.position.set(0, -0.92, 0); 
     rightHand.name = 'rightHand';
     rightHand.castShadow = true;
 
-    rightArm.add(rightHand); // Make hand a child of arm
+    this.rightArm.add(rightHand); // Make hand a child of arm
     
     // Legs (thin cylinders) - SOLID COLOR
     const legGeometry = new THREE.CylinderGeometry(0.1, 0.08, 1.0, 6);
@@ -602,9 +613,11 @@ class SpriteCreature extends THREE.Group {
   moveToward(x, z, speed) {
     const dx = x - this.body.position.x;
     const dz = z - this.body.position.z;
-    let ang = Math.atan2(dz,dx);
-    this.body.position.x += speed * Math.cos(ang);
-    this.body.position.z += speed * Math.sin(ang);
+    savedir = Math.atan2(dz,dx);
+    this.body.position.x += speed * Math.cos(savedir);
+    this.body.position.z += speed * Math.sin(savedir);
+    savedir = Math.atan2(dx,dz);
+ 
   }
 
   moveAway(x, z, speed) {
@@ -613,14 +626,14 @@ class SpriteCreature extends THREE.Group {
     let ang = Math.atan2(dz,dx);
     this.body.position.x -= speed * Math.cos(ang);
     this.body.position.z -= speed * Math.sin(ang);
+    savedir = Math.atan2(dx,dz) + Math.PI;
   }
 
 }
 
 let creatures = [];
-let me;
 for (me=0; me<6; me++) {
- let c=new SpriteCreature(1.4, Math.random()*10-5, Math.random()*8 - 4, 1+Math.floor(me/2));
+ let c=new SpriteCreature(1.4, Math.random()*40-20, Math.random()*40 - 20, 1+Math.floor(me/2));
  creatures.push(c); 
  c.castShadow = true;
  scene.add(c);
@@ -653,6 +666,7 @@ class Target {
      this.box.castShadow = true;
      this.box.receiveShadow = true;
      this.box.position.set(x,35,y);
+     this.temple =0;
      this.number = ++tcounter;
      this.restingplace = [0,0,0];
      this.goresting = 0;
@@ -752,9 +766,18 @@ for (let e=0; e<3; e++) {
 
 const contactMaterial2 = new CANNON.ContactMaterial(pgroundMaterial, dboxMaterial, {
   friction: 0.1,
-  restitution: 0.5 // increase for bouncier impacts
+  restitution: 0.5
 });
 world.addContactMaterial(contactMaterial2);
+
+const eggGeometry = new THREE.SphereGeometry(1, 32, 48);
+const eggpositionAttribute = eggGeometry.attributes.position;
+for (let i = 0; i < eggpositionAttribute.count; i++) {
+  const y = eggpositionAttribute.getY(i);
+  if (y > 0)  eggpositionAttribute.setY(i, y * 1.5);
+  else eggpositionAttribute.setY(i, y * 0.9);
+}
+eggGeometry.computeVertexNormals();
 
 var keydown=[0,0,0,0,0,0,0,0,0,0,0,0];
                       
@@ -771,12 +794,18 @@ var wiw = window.innerWidth;
 var wih = window.innerHeight;
 var overscroll = 0;
 
+function sqpot(o1,o2) {
+  let dx = o2.x-o1.x;
+  let dz = o2.z-o1.z;
+  return dx*dx + dz*dz;
+}
+
 function nearest(limit) {
   let mn = limit;
   let index=-1;
   for (var e=0; e< creatures.length; e++) 
   if (!(e==me)) {
-    let dst=Math.hypot(creatures[e].body.position.x - creatures[me].body.position.x,creatures[e].body.position.z - creatures[me].body.position.z);
+    let dst=sqpot(creatures[e].body.position,cme.body.position);
     if (dst<mn) {
       index=e;
       mn=dst;
@@ -785,111 +814,126 @@ function nearest(limit) {
   return index;
 }
 
-function evade() {
-  
-  let ind = nearest(5);
+window.evade = function evade() {
+  let ind =-1;
+  let mn = 100;
+  dangers.forEach((target,key) => {
+    let dx = target.box.position.x - creatures[me].body.position.x;
+    let dz = target.box.position.z - creatures[me].body.position.z;
+    let dst=sqpot(target.box.position,cme.body.position);
+    if (dst<mn) {
+      ind=key;
+      mn=dst;
+    }
+  });
   if (ind>=0) {
-    creatures[me].moveAway(creatures[ind].body.position.x,creatures[ind].body.position.z,0.1);
+    let t = dangers.get(ind);
+    cme.moveAway(t.body.position.x,t.body.position.z,0.1);
+    cme.facedir = savedir;
+  }
+  else {
+   ind = nearest(25);
+   if (ind>=0) {
+    cme.moveAway(creatures[ind].body.position.x,creatures[ind].body.position.z,0.1);
+    cme.facedir = savedir;
+   }
   }
 }
 
-function pursue() {
-  let c = creatures[me];
-  if (!c.lockedTarget) c.lockedTarget=findTarget(0);
-  if (c.lockedTarget) {
-    let t = targets.get(c.lockedTarget);
+window.pursue = function pursue() {
+  if (!cme.lockedTarget) cme.lockedTarget=findTarget(0);
+  if (cme.lockedTarget) {
+    let t = targets.get(cme.lockedTarget);
     if (t === undefined) 
-       c.lockedTarget=0;
+       cme.lockedTarget=0;
     else {
-      c.moveToward(t.box.position.x,t.box.position.z,0.1);
-      if (targets.get(c.lockedTarget).captured>0) c.lockedTarget=0;
+      cme.moveToward(t.box.position.x,t.box.position.z,0.1);
+      if (targets.get(cme.lockedTarget).captured>0) cme.lockedTarget=0;
       else {
-         if (Math.hypot(c.body.position.x - t.box.position.x,c.body.position.z - t.box.position.z)<1) 
-         if (t.box.position.y - c.body.position.y < 2) {
-          c.health+=20;
+         cme.facedir = savedir;
+         if (sqpot(t.box.position,cme.body.position)<1) 
+         if (t.box.position.y - cme.body.position.y < 2) {
+          cme.health+=20;
           t.captured=1;
-          c.lockedTarget=0;
-          c.currentProg = getProgram();
+          cme.lockedTarget=0;
           t.box.material = mbox2;
+          cme.birthdate=Date.now();
+          cme.currentProg = null;
          }
       }
     }
   }
 }
 
-function findblock() {
-  let c = creatures[me];
-  if (!c.lockedTarget) c.lockedTarget=findTarget(1);
-  if (c.lockedTarget) {
-    let t = targets.get(c.lockedTarget);
+window.findblock = function findblock() {
+  if (!cme.lockedTarget) cme.lockedTarget=findTarget(1);
+  if (cme.lockedTarget) {
+    let t = targets.get(cme.lockedTarget);
     if (t === undefined) 
-       c.lockedTarget=0;
+       cme.lockedTarget=0;
     else {
-      c.moveToward(t.box.position.x,t.box.position.z,0.1);
-      if (targets.get(c.lockedTarget).captured>1) c.lockedTarget=0;
+      cme.moveToward(t.box.position.x,t.box.position.z,0.1);
+      if (targets.get(cme.lockedTarget).captured>1) cme.lockedTarget=0;
       else {
-         if (Math.hypot(c.body.position.x - t.box.position.x,c.body.position.z - t.box.position.z)<1) {
+         cme.facedir = savedir;
+         if (sqpot(t.box.position,cme.body.position)<1) {
           t.captured=2;
           t.box.material = mbox3;
           world.removeBody(t.body);
-          c.currentProg = placeblock;
+          cme.currentProg = placeblock;
          }
       }
     }
   }
-  else c.currentProg = getProgram();
+  else cme.currentProg = null;
 }
 
 function placeblock() {
-  let c = creatures[me];
-  let tmp = Temples[c.faith];
-  c.moveToward(tmp[0],tmp[1],0.1);
-  if (c.lockedTarget > 0) {
-    let t = targets.get(c.lockedTarget);
+  let tmp = Temples[cme.faith];
+  cme.moveToward(tmp.position.x,tmp.position.z,0.1);
+  cme.facedir = savedir;
+  if (cme.lockedTarget > 0) {
+    let t = targets.get(cme.lockedTarget);
     try {
-      t.body.position.set(c.body.position.x + 0.5, c.body.position.y, c.body.position.z + 0.5);
+      t.body.position.set(cme.body.position.x + 0.5, cme.body.position.y, cme.body.position.z + 0.5);
+      let h = sqpot(cme.body.position,tmp.position);
+      if (h<81) {
+        t.captured=3;
+        cme.currentProg = null;
+        let index = tmp.level;
+        let lvl = Math.floor(index/9);
+        index-=lvl*9;
+        let yy = Math.floor(index/3);
+        index-=yy*3;
+        let x = tmp.position.x-1+index;
+        let z = tmp.position.z-1+yy;
+        let y = terrain.getHeight(tmp.position.x,tmp.position.z)+3+lvl;
+        tmp.level++;
+        t.body.position.y+=5;
+        const p0 = new CANNON.Vec3(t.body.position.x,t.body.position.y,t.body.position.z);
+        const pT = new CANNON.Vec3(x,y,z);
+        const dx = pT.x - p0.x;
+        const dz = pT.z - p0.z;
+        const dy = pT.y - p0.y;
+        const d = Math.sqrt(dx * dx + dz * dz);
+        const angle = Math.PI/4;
+        const denom = 2 * Math.cos(angle) ** 2 * (d * Math.tan(angle) - dy);
+        const v0 = Math.sqrt((9.82 * d * d) / denom);
+        const dir = new CANNON.Vec3(dx / d, 0, dz / d);
+        const vel = new CANNON.Vec3(v0 * Math.cos(angle) * dir.x,v0 * Math.sin(angle),v0 * Math.cos(angle) * dir.z);
+        world.addBody(t.body);
+        t.body.velocity.copy(vel);
+        t.goresting=1;
+        t.restingplace = [x,y,z];    
+        if(tmp.level>=27) t.temple = cme.faith;
+        t.birthdate=Date.now();
+      }
     } catch (error) {
       console.error('Error setting target body position:', error);
       console.error('t.body:', t);
-      console.error('c.body:', c);
     }
   }
-  let h = Math.hypot(c.body.position.x - tmp[0],c.body.position.z - tmp[1]);
-  if (h<9) {
-    let t = targets.get(c.lockedTarget);
-    t.captured=3;
-    c.currentProg = getProgram();
-    let tmp = Temples[creatures[me].faith];
-    let index = tmp[2];
-    let lvl = Math.floor(index/9);
-    index-=lvl*9;
-    let yy = Math.floor(index/3);
-    index-=yy*3;
-    let x = tmp[0]-1+index;
-    let z = tmp[1]-1+yy;
-    let y = terrain.getHeight(tmp[0],tmp[1])+3+lvl;
-    tmp[2]++;
-    t.body.position.y+=5;
-    const p0 = new CANNON.Vec3(t.body.position.x,t.body.position.y,t.body.position.z);
-    const pT = new CANNON.Vec3(x,y,z);
-    const dx = pT.x - p0.x;
-    const dz = pT.z - p0.z;
-    const dy = pT.y - p0.y;
-    const d = Math.sqrt(dx * dx + dz * dz);
-    const angle = Math.PI/4;
-    const denom = 2 * Math.cos(angle) ** 2 * (d * Math.tan(angle) - dy);
-    const v0 = Math.sqrt((9.82 * d * d) / denom);
-    const dir = new CANNON.Vec3(dx / d, 0, dz / d);
-    const vel = new CANNON.Vec3(
-    v0 * Math.cos(angle) * dir.x,
-    v0 * Math.sin(angle),
-    v0 * Math.cos(angle) * dir.z
-    );
-    world.addBody(t.body);
-    t.body.velocity.copy(vel);
-    t.goresting=1;
-    t.restingplace = [x,y,z];    
-  }
+  else cme.currentProg = null;
 }
 
 function findTarget(lvl) {
@@ -897,7 +941,7 @@ function findTarget(lvl) {
   let index=0;
   targets.forEach((target, key) => {
    if (target.captured == lvl) {
-    let dst=Math.hypot(target.box.position.x - creatures[me].body.position.x,target.box.position.z - creatures[me].body.position.z);
+    let dst=sqpot(target.box.position,cme.body.position);
     if (dst<mn) {
       index=key;
       mn=dst;
@@ -907,24 +951,192 @@ function findTarget(lvl) {
   return index;
 }
 
-function haverest() {
+window.haverest = function haverest() {
 }
  
-function getProgram() {
-  let r = Math.random();
-  creatures[me].lockedTarget = 0;
-  creatures[me].cooldown=250+Math.random()*200;
-  if (creatures[me].health<25) r+=0.4;
-  if (r<0.2) {
-     creatures[me].cooldown = 200;
-     return haverest;
+window.fight = function fight() {
+  let tt = (Date.now() - tstart) * 0.01;
+  cme.leftArm.rotation.x = tt;
+  cme.rightArm.rotation.x = tt + Math.PI;
+  if (creatures[tnearest[4]]) {
+  creatures[tnearest[4]].health-=0.025;
+  cme.facedir = Math.atan2(creatures[tnearest[4]].position.x - cme.position.x, creatures[tnearest[4]].position.z - cme.position.z);
   }
-  if (r<0.4) return evade;
-  if (r<0.7) {
-     creatures[me].cooldown = 99999;
+  else cme.currentProg = null;
+  cme.health-=0.01;
+}
+
+window.cry = function cry() {
+   let tt = (Date.now() - tstart) * 0.01;
+   cme.leftArm.rotation.z = Math.PI * 0.7 + Math.sin(tt)*0.23;
+   cme.rightArm.rotation.z = Math.PI * 1.3 - Math.sin(tt)*0.23;
+}
+
+const heartShape = new THREE.Shape();
+heartShape.moveTo(25, 25);
+heartShape.bezierCurveTo(25, 25, 20, 0, 0, 0);
+heartShape.bezierCurveTo(-30, 0, -30, 35, -30, 35);
+heartShape.bezierCurveTo(-30, 55, -10, 77, 25, 95);
+heartShape.bezierCurveTo(60, 77, 80, 55, 80, 35);
+heartShape.bezierCurveTo(80, 35, 80, 0, 50, 0);
+heartShape.bezierCurveTo(35, 0, 25, 25, 25, 25);
+
+const extrudeSettings = {
+  steps: 2,   
+  depth: 10,   
+  bevelEnabled: false
+};
+
+const heartgeometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+
+window.mercy = function mercy() {
+   let dst=999999;
+   let index = -1;
+   for (let j=0; j<creatures.length; j++) 
+   if (!(j == cme)) 
+   if (cme.faith == creatures[j].faith)
+   if (sqpot(cme.body.position,creatures[j].body.position)<225)
+   if (creatures[j].health < dst) {
+       dst=creatures[j].health;
+       index=j;
+   }
+   if (index>=0) {
+    if (cme.myEgg === null) {
+      const heartcol =  new THREE.Color(hsvToRgb(gcol[cme.faith],0.35,0.8,0));
+      const heartmaterial = new THREE.MeshPhongMaterial({
+      color: heartcol, 
+      flatShading: true 
+      });
+     const heartMesh = new THREE.Mesh(heartgeometry, heartmaterial);
+     heartMesh.scale.setScalar(0.01);
+     heartMesh.rotation.z = Math.PI;
+     scene.add(heartMesh);
+     cme.myEgg = heartMesh;
+    }
+    let dist = ((Date.now() - tstart) % 1000) / 1000;
+    cme.myEgg.position.x = cme.body.position.x + (creatures[index].body.position.x - cme.body.position.x)*dist;
+    cme.myEgg.position.z = cme.body.position.z + (creatures[index].body.position.z - cme.body.position.z)*dist;
+    cme.myEgg.position.y = terrain.getHeight(cme.myEgg.position.x,cme.myEgg.position.z)+5;
+    cme.health-=0.066;
+    creatures[index].health+=0.05;
+    if ((cme.health<40) || (creatures[index].health>30)) cme.currentProg=null;  
+   }
+   else cme.currentProg = null;
+}
+
+window.brood = function brood() {
+  if (cme.myEgg === null) {
+    let eggCol = new THREE.Color(hsvToRgb(gcol[cme.faith],0.25,0.9,0));
+    const material = new THREE.MeshStandardMaterial({ color: eggCol, roughness: 0.7, metalness: 0 });
+    let ce = new THREE.Mesh(eggGeometry, material);
+    ce.position.set(cme.body.position.x,terrain.getHeight(cme.body.position.x,cme.body.position.z)+0.5,cme.body.position.z);
+    cme.birthdate=Date.now();
+    scene.add(ce);
+    cme.myEgg = ce;
+  }
+  let scl = 0.5 + (Date.now() - cme.birthdate)/10000;
+  cme.myEgg.scale.setScalar(scl);
+  if (scl>1.5) {
+    cme.currentProg = null;
+    let c = new SpriteCreature(1.4,cme.body.position.x+1, cme.body.position.z+1,cme.faith);
+    c.health=80;
+    creatures.push(c);
+    c.castShadow = true;
+    scene.add(c);
+
+  }  
+}
+
+let def=` 
+  let cme = myself();
+  if (NearestBomb() && NearestBomb().distance< 3.5) return evade;
+  if (myself().health<20) return (tnearestmin[0]>16 ? cry : pursue);
+  if (tnearestmin[4]<25) {
+    if (Math.random()<0.25) return evade;
+    if (Math.random()>0.75) return fight;
+  }
+  if (tnearestmin[0]<225) 
+  if (Math.random()>Math.sqrt(tnearestmin[0])/20) return pursue;
+  if (cme.health>40) 
+    if (cme.health > tnearestmin[5] * 1.5) 
+      return mercy;
+  if (tnearestmin[1]<900) 
+  if (cme.health>30)
+  if (Date.now()-cme.birthdate>1500)
      return findblock;
+  if (cme.health>101) if (Math.random()>0.75) return brood;
+  if (Math.random()>0.8) return pursue;
+  if (Math.random()<0.25) return findblock;
+  return haverest;`;
+
+let funcs = [];
+funcs.push(new Function(def));
+
+funcs.push(new Function('return fight; '));
+funcs.push(new Function('console.log(NearestUnopenedBox()); if (NearestUnopenedBox()) return pursue; if (NearestFoe() && myself().health > NearestFoe().health * 1.5) return fight; if (NearestBomb()) return evade; if (NearestEmergency() && myself().health > 30) return mercy; if (NearestStackableBox()) return findblock; return haverest;'));
+
+
+function getProgram() {
+  cme=creatures[me];
+
+  switch (cme.currentProg) {
+    case brood: return brood; break; 
+    case cry: if (Math.random()<0.85) return cry; break; 
+    case evade: if (Math.random()<0.85) return evade; break; 
+    case pursue: if (Math.random()<0.7) return pursue; break; 
+    case fight: if (Math.random()<0.75) return fight; break; 
+    case findblock: 
+    case placeblock: if (cme.health>10) return cme.currentProg;  break;
   }
-  return pursue;
+  try {
+    const f = funcs[creatures[me].decision];
+    if (typeof f === 'function') {
+      return f();  // <-- CALL IT
+    }
+  } catch (e) {
+    console.warn(e);
+  }
+  return haverest;
+}
+
+window.myself = function myself() {
+  return creatures[me];
+}
+
+window.NearestBomb = function NearestBomb() {
+  if (tnearestmin[2]>100) return null;
+  let b = dangers.get(tnearest[2]).box;
+  return {distance : Math.hypot(b.position.x - cme.position.x, b.position.z - cme.position.z), position: b.position};
+}
+
+window.NearestUnopenedBox = function NearestUnopenedBox() {
+  if (tnearestmin[0]>100) return null;
+  let b = targets.get(tnearest[0]).box;
+  return {distance : Math.hypot(b.position.x - cme.position.x, b.position.z - cme.position.z), position: b.position};
+}
+
+window.NearestStackableBox = function NearestStackableBox() {
+  if (tnearestmin[1]>100) return null;
+  let b = targets.get(tnearest[1]).box;
+  return {distance : Math.hypot(b.position.x - cme.position.x, b.position.z - cme.position.z), position: b.position};
+}
+
+window.NearestFriend = function NearestFriend() {
+  if (tnearestmin[3]>100) return null;
+  let b = creatures[tnearest[3]];
+  return {distance : Math.hypot(b.position.x - cme.position.x, b.position.z - cme.position.z), position: b.position, health: b.health, faith: b.faith, devotion: b.devotion};
+}
+
+window.NearestFoe = function NearestFoe() {
+  if (tnearestmin[4]>100) return null;
+  let b = creatures[tnearest[4]];
+  return {distance : Math.hypot(b.position.x - cme.position.x, b.position.z - cme.position.z), position: b.position, health: b.health, faith: b.faith, devotion: b.devotion};
+}
+
+window.NearestEmergency = function NearestEmergency() {
+  if (tnearestmin[5]>100) return null;
+  let b = creatures[tnearest[5]];
+  return {distance : Math.hypot(b.position.x - cme.position.x, b.position.z - cme.position.z), position: b.position, health: b.health, faith: b.faith, devotion: b.devotion};
 }
 
 const raycaster = new THREE.Raycaster();
@@ -962,11 +1174,12 @@ document.addEventListener('keydown', (e) => {
          case 32 : goodbad = 1-goodbad; break;
          case 84 :
             for (let i=0; i<creatures.length; i++) {
-              console.log('pos='+creatures[i].body.position.x.toFixed(1)+','+creatures[i].body.position.z.toFixed(1)+' health='+creatures[i].healath);
+              console.log('pos='+creatures[i].body.position.x.toFixed(1)+','+creatures[i].body.position.z.toFixed(1)+' health='+creatures[i].health);
 
             };
 
            break;
+         case 80: gamepause = 1-gamepause; break; 
          default : console.log(camera.position);
                    console.log('theta='+theta);
                    console.log('yang='+yang);
@@ -1022,7 +1235,10 @@ renderer.domElement.addEventListener('mousedown', (event) => {
     let root = hit;
     while (root.parent && !(root instanceof SpriteCreature)) root = root.parent;
     const index = creatures.indexOf(root);
-    if (index !== -1) showCreature(index);
+    if (index !== -1) {
+      trackme=creatures[index].number;
+      console.log('index='+index+' number='+trackme);
+    }
   }
 
  },false);
@@ -1052,16 +1268,22 @@ function handleDrag(event) {
 }
 
 function showCreature(a) {
-  var txt;
+
+  var txt = 'Custom';
+  if (creatures[a].currentProg) 
   switch (creatures[a].currentProg) {
     case pursue: txt='Pursue'; break;
     case evade: txt='Evade'; break;
     case haverest: txt='Rest'; break;
+    case cry : txt='Cry'; break;
+    case mercy: txt='Mercy'; break;
+    case brood: txt='Brood'; break;
+    case fight: txt='Fight'; break;
     case findblock: txt='Find Block'; break;
     case placeblock: txt='Place Block'; break;
-    default: txt='Custom';
   }
-  document.getElementById('info').innerHTML='Creature #'+a+'<br><br>Current Function:<br>'+txt+'<br><br>Health: '+ creatures[a].health.toFixed(1)+'<br><br>Faith: '+gods[creatures[a].faith];
+  if (creatures[a].health<=0.1) txt='EternalRest';
+  document.getElementById('info').innerHTML='Creature #'+creatures[a].number+'<br><br>Current Function:<br>'+txt+'<br><br>Health: '+ creatures[a].health.toFixed(1)+'<br><br>Faith: '+gods[creatures[a].faith];
 }
 
 function hsvToRgb(h, s, v, raw) {
@@ -1106,7 +1328,7 @@ for (let e=1; e<4; e++) {
   let x = dst * Math.cos(ang);
   let z = dst * Math.sin(ang);
   let y = terrain.getHeight(x,z)+3.5;
-  Temples.push([x,z,0]);
+  Temples.push({position: { x: x, z: z}, level: 0});
   const tboxg = new THREE.BoxGeometry(3,10,3);
   const tcolor = new THREE.Color(hsvToRgb(gcol[e],1,1,0));
   const tbasem = new THREE.MeshStandardMaterial({color: tcolor, side: THREE.DoubleSide});
@@ -1130,12 +1352,23 @@ for (let e=1; e<4; e++) {
 }
   
 let tstart = Date.now();
+let tme=0;
+let tnearest=[];
+let tnearestmin=[];
+let gamewon=0;
+window.tnearest = tnearest;
+window.tnearestmin = tnearestmin;
+window.creatures = creatures;
 
 function animate() {
+ if ((!gamewon) && (!gamepause)) {
   world.step(1/60);
   skyMat.uniforms.time.value += 0.01;
   let now = Date.now();
-
+  let tt = (now - tstart) * 0.01;
+  tnearest = [-1,-1,-1,-1,-1,-1];   // food box, resource box, danger mine, friend, foe, crying
+  tnearestmin = [99999999,99999999,9999999,9999999,9999999,9999999];
+  
   targets.forEach((target,key) => {
     target.box.position.copy(target.body.position);
     target.box.quaternion.copy(target.body.quaternion);
@@ -1150,9 +1383,17 @@ function animate() {
         scene.remove(target.box);
         targets.delete(key);
       }
+      let dst = sqpot(target.body.position,creatures[tme].position);
+      let cap = target.captured;
+      if (target.body.position.y<15)
+      if (dst<tnearestmin[cap]) {
+         tnearestmin[cap]=dst;
+         tnearest[cap]=key;
+      }
     } else {
       if (target.goresting>0) {
         let h = Math.hypot(target.body.position.x - target.restingplace[0],target.body.position.y-target.restingplace[1],target.body.position.z-target.restingplace[2]);
+        if (target.goresting<2) if (now - target.birthdate>3300) h=3;
         if (h<3.5) {
           if (target.goresting<2) {
             target.body.velocity.set(0,0,0);
@@ -1164,15 +1405,26 @@ function animate() {
             target.goresting=2;
           }
           if (target.goresting<3) {
-            let elap = Math.min(2000,now - target.birthdate);
-            let fct=0.03*(1+elap/500);
+            let elap = Math.min(2001,now - target.birthdate);
+            let fct=0.03*(1+elap/500); 
             target.body.position.x += (target.restingplace[0]-target.body.position.x)*fct;  
             target.body.position.y += (target.restingplace[1]-target.body.position.y)*fct;
             target.body.position.z += (target.restingplace[2]-target.body.position.z)*fct;
             const targetQuat = new CANNON.Quaternion();
             targetQuat.setFromEuler(0, 0, 0);    
             target.body.quaternion.slerp(targetQuat, elap/2000, target.body.quaternion);
-            if ((elap>2000) && (h<0.01)) target.goresting=3;
+            if ((elap>=2000) && (h<0.01)) {
+               target.goresting=3;
+               if (!gamewon) if (target.temple) {
+                 gamewon=target.temple;
+                 const winColor = new THREE.Color(hsvToRgb(gcol[gamewon],0.8,0.5,0));
+                 sky.material = new THREE.MeshStandardMaterial({color: winColor, emissive: winColor, emissiveIntensity: 1.3});
+                 let d = document.getElementById('headdiv');
+                 d.style.color = 'white';
+                 d.style.opacity=1;
+                 d.innerHTML=gods[gamewon]+' Wins!!!!';
+               }
+            }
           }
         }
       }
@@ -1182,14 +1434,22 @@ function animate() {
      target.box.position.copy(target.body.position);
      target.box.quaternion.copy(target.body.quaternion);
      target.strength-=0.002;
-     if (target.strength>0) 
+     if (target.strength>0) {
        target.box.material.opacity = target.strength;
+       let dst=sqpot(target.body.position,creatures[tme].position);
+       if (dst<tnearestmin[2]) {
+          tnearestmin[2]=dst;
+          tnearest[2]=key;
+       } 
+     }
      else {
        scene.remove(target.box);
+       world.removeBody(target.body);
        dangers.delete(key);
      }
   });
 
+ 
 
   const dummy = new THREE.Object3D();
   for (let i = 0; i < sunmesh.count; i++) {
@@ -1204,9 +1464,6 @@ function animate() {
   }
   sunmesh.instanceMatrix.needsUpdate = true;
 
-  // let elap = 1 + (now - tstart)/5000;
-  // directionalLight.position.set(0, 120 * Math.sin(elap), 120 * Math.cos(elap));
-//   directionalLight.target.position.set(0,terrain.getHeight(0,0),0);
   let rs = revlights.length;
   let takeout=-1;
   for (let i=0;  i<rs; i++) {
@@ -1254,6 +1511,11 @@ function animate() {
           ce.birthdate = Date.now(); 
           ce.body.position.x = r.beam.position.x;
           ce.body.position.z = r.beam.position.z;
+          if (!(ce.myEgg === null)) {
+            scene.remove(ce.myEgg);
+            ce.myEgg.material.dispose();
+            ce.myEgg = null;
+          }
           ce.currentProg = null;
        }
      }
@@ -1266,83 +1528,156 @@ function animate() {
     revlights.splice(takeout,1);
   }
 
-  for(me=0; me<creatures.length; me++) 
-  if (creatures[me].health>0) {
-    let c = creatures[me];
-    if (c.currentProg === null) 
-      c.currentProg = getProgram();
-    if (c.mode ==0) c.currentProg();
-    c.body.position.x = envclamp(c.body.position.x);
-    c.body.position.z = envclamp(c.body.position.z);
-    c.body.position.y=1.2 * c.creatureSize + terrain.getHeight(c.body.position.x,c.body.position.z);
-    let life = now - c.birthdate;
-    switch (c.mode) {
+  for(me=0; me<creatures.length; me++) {
+    cme = creatures[me];
+    if (!(cme.currentProg === null)) 
+    if (cme.mode ==0) cme.currentProg();
+    cme.body.position.x = envclamp(cme.body.position.x);
+    cme.body.position.z = envclamp(cme.body.position.z);
+    cme.body.position.y=1.2 * cme.creatureSize + terrain.getHeight(cme.body.position.x,cme.body.position.z);
+    if (!(cme.myEgg === null)) 
+    if (cme.currentProg == brood) {
+      cme.body.position.x = cme.myEgg.position.x;
+      cme.body.position.z = cme.myEgg.position.z;
+      cme.body.position.y+= cme.myEgg.scale.x * 0.75 + 0.1;
+      cme.health -= 0.02;
+    }
+    let life = now - cme.birthdate;
+    switch (cme.mode) {
      case 1:
-      c.body.position.y+= life/2000 -2;
+      cme.body.position.y+= life/2000 -2;
       if (life>4000) {
-        c.mode=0;
-        c.body.type = CANNON.Body.DYNAMIC;
+        cme.mode=0;
+        cme.body.type = CANNON.Body.DYNAMIC;
       }
       break;
     case 2 :
-      c.body.position.y+= life/100;
-      c.scale.setScalar(c.creatureSize * (1-life/4500));
-      c.body.quaternion.setFromEuler(life/500, 0, life / 800, "XYZ");
+      cme.body.position.y+= life/100;
+      cme.scale.setScalar(cme.creatureSize * (1-life/4500));
+      cme.body.quaternion.setFromEuler(life/500, 0, life / 800, "XYZ");
       if (life>3000) {
-        c.mode=3;
-        c.birthdate = now;
+        cme.mode=3;
+        cme.birthdate = now;
+        cme.decision = 2;
       }
       break;
     case 3 : 
+      cme.body.position.y+= 30;
+
       if (life>1000) {
-        c.mode=4;
-        c.body.quaternion.setFromEuler(0, 0, 0, "XYZ");
+        cme.mode=4;
+        cme.body.quaternion.setFromEuler(0, 0, 0, "XYZ");
       }
       break;
    case 4 : 
       let ht = 4 * Math.pow(life/1000,2);
-      c.body.position.y+= 30 - ht;
-      c.scale.setScalar(c.creatureSize* ht/30);
+      cme.body.position.y+= 30 - ht;
+      cme.scale.setScalar(cme.creatureSize* ht/30);
 
       if (ht>=30) {
-       c.body.type = CANNON.Body.DYNAMIC;
-       c.scale.setScalar(c.creatureSize);
-       c.mode=0;      
+       cme.body.type = CANNON.Body.DYNAMIC;
+       cme.scale.setScalar(cme.creatureSize);
+       cme.mode=0;      
       }
     }
-    c.body.angularVelocity.x = 0;
-    c.body.angularVelocity.z = 0;
-    if (c.mode < 2) {
-    let euler = new CANNON.Vec3();
-    c.body.quaternion.toEuler(euler);
-    euler.x = 0;
-    euler.z = 0;
-    c.body.quaternion.setFromEuler(euler.x, euler.y, euler.z);
+    cme.body.angularVelocity.x = 0;
+    cme.body.angularVelocity.z = 0;
+    if (cme.mode < 2) {
+      const up = new CANNON.Vec3(0,1,0);
+      const forward = new CANNON.Vec3(0,0,1);
+      const cDir = cme.body.quaternion.vmult(forward);
+      const cYaw = Math.atan2(cDir.x, cDir.z);
+      let diff = cme.facedir - cYaw;
+      if (diff > Math.PI) diff -= 2 * Math.PI;
+      if (diff < -Math.PI) diff += 2 * Math.PI;
+      const step = Math.sign(diff) * Math.min(Math.abs(diff), 0.15);
+      const qStep = new CANNON.Quaternion();
+      qStep.setFromAxisAngle(up, step);
+      cme.body.quaternion = qStep.mult(cme.body.quaternion);
+      const qUpright = new CANNON.Quaternion();
+      const euler = new CANNON.Vec3();
+      cme.body.quaternion.toEuler(euler);
+      qUpright.setFromEuler(0, euler.y, 0);
+      cme.body.quaternion.copy(qUpright);
+      if (!(me == tme)) {
+         let dst = sqpot(cme.body.position,creatures[tme].body.position);
+         let ff = (cme.faith == creatures[tme].faith ? 3 : 4);
+         if (dst<tnearestmin[ff]) {
+            tnearestmin[ff]=dst;
+            tnearest[ff]=me;
+            
+         }
+         if (dst < 225) 
+         if (cme.faith == creatures[tme].faith) 
+          if (cme.currentProg === cry) 
+            if (cme.health<tnearestmin[5]) 
+               tnearestmin[5]=cme.health;
+         
+      }
     }
-    c.position.copy(c.body.position);
-    c.quaternion.copy(c.body.quaternion);
+    cme.position.copy(cme.body.position);
+    cme.quaternion.copy(cme.body.quaternion);
    
    dangers.forEach((danger,key) => {
-      if (Math.abs(c.position.x - danger.box.position.x)<3)
-      if (Math.abs(c.position.y - danger.box.position.y)<3)
-      if (Math.abs(c.position.z - danger.box.position.z)<3) {
-         var dst = 1+Math.hypot(c.position.x - danger.box.position.x,c.position.y - danger.box.position.y);
-         c.health -= 6 * danger.strength / dst;
+      if (Math.abs(cme.position.x - danger.box.position.x)<3)
+      if (Math.abs(cme.position.y - danger.box.position.y)<3)
+      if (Math.abs(cme.position.z - danger.box.position.z)<3) {
+         var dst = 1+Math.hypot(cme.position.x - danger.box.position.x,cme.position.z - danger.box.position.z);
+         cme.health -= 6 * danger.strength / dst;
       }
    });
-   if (--c.cooldown<=0) c.currentProg = getProgram();
-   c.health-=0.03 * Math.sqrt(c.creatureSize);
-   if (c.health<=0) {
-      scene.remove(c);
-      world.removeBody(c.body);
-      if (c.currentProg === placeblock) 
-      if (c.lockedTarget>0) {
-         let t = targets.get(c.lockedTarget);
+   cme.health-=0.02;
+
+
+   if (cme.health<=0) {
+      if (!(cme.myEgg === null)) {
+        scene.remove(cme.myEgg);
+        cme.myEgg.material.dispose();
+        cme.myEgg = null;
+      }
+      scene.remove(cme);
+      world.removeBody(cme.body);
+      if (cme.currentProg === placeblock) 
+      if (cme.lockedTarget>0) {
+         let t = targets.get(cme.lockedTarget);
          t.captured=1;
-         t.body.material = mbox2;
+         t.box.material = mbox2;
       }    
    }
   }
+
+  me=tme;
+  cme=creatures[me];
+  if (cme.number == trackme) showCreature(tme);
+  if (cme.mode ==0) {
+     let newFunc = getProgram();
+     if (!(newFunc === cme.currentProg)) {
+        cme.leftArm.rotation.x=0;
+        cme.rightArm.rotation.x=0;
+        cme.leftArm.rotation.z=-Math.PI * 0.25;
+        cme.rightArm.rotation.z=Math.PI * 0.25;
+
+        if (cme.currentProg === placeblock) 
+        if (cme.lockedTarget>0) {
+          let t = targets.get(cme.lockedTarget);
+          t.captured=1;
+          t.box.material = mbox2;
+        }    
+        cme.lockedTarget=0;
+        if (!(cme.myEgg === null)) {
+          scene.remove(cme.myEgg);
+          cme.myEgg.material.dispose();
+          cme.myEgg = null;
+        }
+        cme.currentProg = newFunc;
+     }
+  } 
+  if (++tme>=creatures.length) {
+     creatures=creatures.filter(entity => entity.health > 0);
+     tme=0;
+  }
+ }
+
    if (keydown[1]) {
      theta+=0.015;
    }
@@ -1416,7 +1751,7 @@ function askGod()
       }
       xmlhttp.open("GET",url,true);
       xmlhttp.send(null);
-      setTimeout(askGod,5000);
+      if (!gamewon) setTimeout(askGod,5000);
   }
 
 function GetXmlHttpObject()
@@ -1467,7 +1802,8 @@ if (xmlhttp.readyState==4)
 }
 
 function doGodsWork(god,m) {
-     if (Math.random()<0.1) {
+   if (!gamewon) {
+     if (Math.random()<0.05) {
        m.action = 'Immaculate';
        m.x /=2;
        m.y /=2;
@@ -1493,11 +1829,11 @@ function doGodsWork(god,m) {
           c.body.type = CANNON.Body.STATIC;
           creatures.push(c);
           me = creatures.length-1;  
-          c.currentProg = getProgram();
           c.castShadow = true;
           scene.add(c);
         }
 //        console.log(gods[god]+' => '+JSON.stringify(m));
+  }
 }
 
 var headop=2;
@@ -1513,6 +1849,7 @@ function headdisplay(s,g) {
 
 function lowhead() {
   headop-=0.02;
+  if (!gamewon)
   if (headop>=0) {
      document.getElementById('headdiv').style.opacity= Math.min(1,headop);
      setTimeout(lowhead,50);
